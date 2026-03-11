@@ -4,11 +4,13 @@
  * Gogs AI 아키텍트 CLI
  *
  * 명령어:
- * - gogs-ai ask "질문"
- * - gogs-ai review [repo]
- * - gogs-ai status
- * - gogs-ai chat
- * - gogs-ai dashboard
+ * - gogs-ai ask "질문"           - 질문 응답 (RAG 기반)
+ * - gogs-ai audit                - 종합 아키텍처 감사
+ * - gogs-ai route "질문"         - 전문 에이전트 분석
+ * - gogs-ai analyze "패턴"       - 코드 패턴 분석
+ * - gogs-ai status               - 상태 조회
+ * - gogs-ai dashboard            - 대시보드
+ * - gogs-ai chat                 - 대화형 모드
  */
 
 import readline from 'readline';
@@ -17,6 +19,9 @@ import KnowledgeBase from './knowledge-base.js';
 import Embedder from './embedder.js';
 import RAGEngine from './rag-engine.js';
 import ArchitectPersona from './architect-persona.js';
+import DecisionEngine from './decision-engine.js';
+import TeamRouter from './team-router.js';
+import PatternAnalyzer from './pattern-analyzer.js';
 
 class CLI {
   constructor() {
@@ -25,6 +30,9 @@ class CLI {
     this.embedder = new Embedder(this.kb);
     this.rag = new RAGEngine(this.kb, this.embedder);
     this.persona = new ArchitectPersona(this.kb, this.rag);
+    this.engine = new DecisionEngine();
+    this.router = new TeamRouter(this.kb, this.embedder);
+    this.analyzer = new PatternAnalyzer();
   }
 
   /**
@@ -122,8 +130,8 @@ ADR: ${stats.adrCount}개
    */
   async chat() {
     this.log('\n💬 Gogs AI 아키텍트 (대화 모드)\n', 'bright');
-    this.log('명령어: ask, status, dashboard, exit', 'dim');
-    this.log('예: ask "architecture decision"\n', 'dim');
+    this.log('명령어: ask, audit, route, analyze, status, dashboard, exit', 'dim');
+    this.log('예: ask "질문" | audit | route "질문" | analyze "패턴"\n', 'dim');
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -142,12 +150,18 @@ ADR: ${stats.adrCount}개
 
         if (cmd === 'ask') {
           await this.ask(args.join(' '));
+        } else if (cmd === 'audit') {
+          await this.audit();
+        } else if (cmd === 'route') {
+          await this.route(args.join(' '));
+        } else if (cmd === 'analyze') {
+          await this.analyze(args.join(' '));
         } else if (cmd === 'status') {
           await this.status();
         } else if (cmd === 'dashboard') {
           await this.dashboard();
         } else if (cmd === 'help') {
-          this.log('명령어: ask, status, dashboard, exit', 'cyan');
+          this.log('명령어: ask, audit, route, analyze, status, dashboard, exit', 'cyan');
         } else {
           this.log('❌ 알 수 없는 명령어\n', 'yellow');
         }
@@ -157,6 +171,90 @@ ADR: ${stats.adrCount}개
     };
 
     prompt();
+  }
+
+  /**
+   * 종합 아키텍처 감사 (decision-engine 실행)
+   */
+  async audit() {
+    this.log('\n🔍 아키텍처 종합 감사 시작...\n', 'cyan');
+
+    try {
+      await this.engine.connect();
+
+      // 1. 리스크 스코어 계산
+      await this.engine.calculateRiskScores();
+
+      // 2. 순환 의존성 탐지
+      const cycles = await this.engine.detectCircularDependencies();
+
+      // 3. 미사용 함수 탐지
+      const unused = await this.engine.detectUnusedFunctions();
+
+      // 4. 중복 함수 탐지
+      const dups = await this.engine.detectDuplicates();
+
+      // 5. 핫스팟 탐지
+      const hotspots = await this.engine.detectHotspots();
+
+      // 6. 액션 계획 생성
+      await this.engine.generateActionPlan(cycles, unused, dups, hotspots);
+
+      this.log('\n✓ 감사 완료\n', 'green');
+      this.engine.db.close();
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
+  }
+
+  /**
+   * 팀 라우터 (질문 자동 분류 및 에이전트 분석)
+   */
+  async route(query) {
+    this.log(`\n🤖 "${query}" 전문 에이전트 분석...\n`, 'cyan');
+
+    try {
+      // 질문 분류
+      const classified = this.router.classifyQuery(query);
+      this.log(`📋 주 에이전트: ${classified.agent.toUpperCase()} (신뢰도: ${(classified.confidence * 100).toFixed(0)}%)`, 'blue');
+
+      // 다중 에이전트 분석
+      const result = await this.router.analyzeWithMultipleAgents(query, 2);
+
+      // 결과 출력
+      this.log(`\n🎯 분석 결과\n`, 'bright');
+      result.results.forEach((agentResult, idx) => {
+        this.log(`\n[${idx + 1}] ${agentResult.agent.toUpperCase()} 분석`, 'cyan');
+
+        if (agentResult.findings && agentResult.findings.length > 0) {
+          agentResult.findings.forEach(finding => {
+            console.log(`  📍 ${finding.chunk.name}`);
+            console.log(`     위치: ${finding.chunk.meta.repo}/${finding.chunk.meta.file}:${finding.chunk.meta.lineStart}`);
+            console.log(`     점수: ${finding.finalScore.toFixed(3)}`);
+          });
+        }
+      });
+
+      this.log(`\n✓ 분석 완료\n`, 'green');
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
+  }
+
+  /**
+   * 패턴 분석 (코드 패턴 검색 및 개선 제안)
+   */
+  async analyze(pattern) {
+    this.log(`\n🔍 코드 패턴 분석 중...\n`, 'cyan');
+
+    try {
+      await this.analyzer.connect();
+      const results = await this.analyzer.findPatternUsage(pattern);
+      this.analyzer.printResults(results);
+      await this.analyzer.close();
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
   }
 
   /**
@@ -184,7 +282,10 @@ ADR: ${stats.adrCount}개
     if (args.length === 0) {
       this.log('\n📖 Gogs AI 아키텍트 CLI\n', 'bright');
       this.log('사용법:', 'cyan');
-      this.log('  gogs-ai ask "질문"        - 질문 응답', 'cyan');
+      this.log('  gogs-ai ask "질문"        - 질문 응답 (RAG 기반)', 'cyan');
+      this.log('  gogs-ai audit             - 종합 아키텍처 감사 (decision-engine)', 'cyan');
+      this.log('  gogs-ai route "질문"      - 전문 에이전트 분석 (팀 라우터)', 'cyan');
+      this.log('  gogs-ai analyze "패턴"    - 코드 패턴 분석 (277개 저장소)', 'cyan');
       this.log('  gogs-ai status            - 상태 조회', 'cyan');
       this.log('  gogs-ai dashboard         - 대시보드', 'cyan');
       this.log('  gogs-ai chat              - 대화형 모드\n', 'cyan');
@@ -196,6 +297,12 @@ ADR: ${stats.adrCount}개
 
     if (cmd === 'ask') {
       await this.ask(rest);
+    } else if (cmd === 'audit') {
+      await this.audit();
+    } else if (cmd === 'route') {
+      await this.route(rest);
+    } else if (cmd === 'analyze') {
+      await this.analyze(rest);
     } else if (cmd === 'status') {
       await this.status();
     } else if (cmd === 'dashboard') {
