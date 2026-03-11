@@ -1,0 +1,327 @@
+{
+  "metadata": {
+    "createdAt": "2026-03-11T16:19:32.502Z",
+    "updatedAt": "2026-03-11T16:36:31.150Z",
+    "version": "0.1.0"
+  },
+  "chunks": [
+    {
+      "id": "test/md/README.md:0:Architecture",
+      "type": "section",
+      "name": "Architecture",
+      "content": "# Architecture\n",
+      "meta": {
+        "repo": "test",
+        "file": "README.md",
+        "lineStart": 1,
+        "lineEnd": 2,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/README.md:2:Phase 1: Foundation",
+      "type": "section",
+      "name": "Phase 1: Foundation",
+      "content": "## Phase 1: Foundation\n\n구조를 설계합니다.\n",
+      "meta": {
+        "repo": "test",
+        "file": "README.md",
+        "lineStart": 3,
+        "lineEnd": 6,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/README.md:6:Step 1: API 클라이언트",
+      "type": "section",
+      "name": "Step 1: API 클라이언트",
+      "content": "### Step 1: API 클라이언트\n\nREST API 래퍼를 작성합니다.\n",
+      "meta": {
+        "repo": "test",
+        "file": "README.md",
+        "lineStart": 7,
+        "lineEnd": 10,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/README.md:10:Step 2: File Scraper",
+      "type": "section",
+      "name": "Step 2: File Scraper",
+      "content": "### Step 2: File Scraper\n\n저장소를 스캔합니다.\n",
+      "meta": {
+        "repo": "test",
+        "file": "README.md",
+        "lineStart": 11,
+        "lineEnd": 14,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/README.md:14:Phase 2: Intelligence",
+      "type": "section",
+      "name": "Phase 2: Intelligence",
+      "content": "## Phase 2: Intelligence\n\n지능을 주입합니다.",
+      "meta": {
+        "repo": "test",
+        "file": "README.md",
+        "lineStart": 15,
+        "lineEnd": 17,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/function/test.py:0:tokenize",
+      "type": "function",
+      "name": "tokenize",
+      "content": "def tokenize(text):\n    \"\"\"문자열을 토큰으로 분해\"\"\"\n    tokens = []\n    for char in text:\n        if char == ' ':\n            tokens.append(char)\n    return tokens\n",
+      "meta": {
+        "repo": "test",
+        "file": "test.py",
+        "lineStart": 1,
+        "lineEnd": 8,
+        "language": "python"
+      }
+    },
+    {
+      "id": "test/function/test.py:8:analyze",
+      "type": "function",
+      "name": "analyze",
+      "content": "def analyze(text):\n    \"\"\"텍스트 분석\"\"\"\n    tokens = tokenize(text)\n    return len(tokens)",
+      "meta": {
+        "repo": "test",
+        "file": "test.py",
+        "lineStart": 9,
+        "lineEnd": 12,
+        "language": "python"
+      }
+    },
+    {
+      "id": "test/md/ARCHITECTURE.md:0:Range 메모리 버그 분석",
+      "type": "section",
+      "name": "Range 메모리 버그 분석",
+      "content": "# Range 메모리 버그 분석\n",
+      "meta": {
+        "repo": "test",
+        "file": "ARCHITECTURE.md",
+        "lineStart": 1,
+        "lineEnd": 2,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/ARCHITECTURE.md:2:문제",
+      "type": "section",
+      "name": "문제",
+      "content": "## 문제\n배열 range() 함수에서 메모리 누수 발생.\n",
+      "meta": {
+        "repo": "test",
+        "file": "ARCHITECTURE.md",
+        "lineStart": 3,
+        "lineEnd": 5,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/ARCHITECTURE.md:5:원인",
+      "type": "section",
+      "name": "원인",
+      "content": "### 원인\n- 동적 배열 할당 미흡\n- 범위 초과 접근\n",
+      "meta": {
+        "repo": "test",
+        "file": "ARCHITECTURE.md",
+        "lineStart": 6,
+        "lineEnd": 9,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/md/ARCHITECTURE.md:9:솔루션",
+      "type": "section",
+      "name": "솔루션",
+      "content": "## 솔루션\nADR-001: 메모리 안전성 강화\n- 범위 검증 필수\n- 명시적 해제\n  ",
+      "meta": {
+        "repo": "test",
+        "file": "ARCHITECTURE.md",
+        "lineStart": 10,
+        "lineEnd": 14,
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "test/js/range.js:0:range",
+      "type": "function",
+      "name": "range",
+      "content": "function range(start, end) {\n  // 범위 검증 부재 (ADR-001 위반)\n  const arr = [];\n  for (let i = start; i <= end; i++) {\n    arr.push(i);\n  }\n  return arr;\n}\n",
+      "meta": {
+        "repo": "test",
+        "file": "range.js",
+        "lineStart": 1,
+        "lineEnd": 9,
+        "language": "javascript"
+      }
+    },
+    {
+      "id": "test/js/range.js:8:rangeFixed",
+      "type": "function",
+      "name": "rangeFixed",
+      "content": "\nfunction rangeFixed(start, end) {\n  // ADR-001 준수: 범위 검증 추가\n  if (start < 0 || end > 1000000) {\n    throw new Error('Range out of bounds');\n  }\n  const arr = [];\n  for (let i = start; i <= end; i++) {\n    arr.push(i);\n  }\n  return arr;\n}",
+      "meta": {
+        "repo": "test",
+        "file": "range.js",
+        "lineStart": 9,
+        "lineEnd": 20,
+        "language": "javascript"
+      }
+    }
+  ],
+  "commits": [
+    {
+      "sha": "abc1234",
+      "message": "fix: ADR-001 Range 메모리 버그 수정\n\n범위 검증 추가하여 메모리 안전성 강화.",
+      "author": {
+        "name": "Kim",
+        "date": "2026-03-11T16:36:31.142Z"
+      },
+      "file": "range.js"
+    },
+    {
+      "sha": "def5678",
+      "message": "feat: Phase 2 시작",
+      "author": {
+        "name": "Kim",
+        "date": "2026-03-11T16:36:31.142Z"
+      },
+      "file": "range.js"
+    },
+    {
+      "sha": "ghi9012",
+      "message": "docs: ARCHITECTURE.md 업데이트",
+      "author": {
+        "name": "Kim",
+        "date": "2026-03-11T16:36:31.142Z"
+      },
+      "file": "range.js"
+    }
+  ],
+  "files": [],
+  "keywords": {
+    "1000000": [
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "architecture": [
+      "test/md/README.md:0:Architecture"
+    ],
+    "phase": [
+      "test/md/README.md:2:Phase 1: Foundation",
+      "test/md/README.md:14:Phase 2: Intelligence"
+    ],
+    "foundation": [
+      "test/md/README.md:2:Phase 1: Foundation"
+    ],
+    "step": [
+      "test/md/README.md:6:Step 1: API 클라이언트",
+      "test/md/README.md:10:Step 2: File Scraper"
+    ],
+    "api": [
+      "test/md/README.md:6:Step 1: API 클라이언트"
+    ],
+    "rest": [
+      "test/md/README.md:6:Step 1: API 클라이언트"
+    ],
+    "file": [
+      "test/md/README.md:10:Step 2: File Scraper"
+    ],
+    "scraper": [
+      "test/md/README.md:10:Step 2: File Scraper"
+    ],
+    "intelligence": [
+      "test/md/README.md:14:Phase 2: Intelligence"
+    ],
+    "def": [
+      "test/function/test.py:0:tokenize",
+      "test/function/test.py:8:analyze"
+    ],
+    "tokenize": [
+      "test/function/test.py:0:tokenize",
+      "test/function/test.py:8:analyze"
+    ],
+    "text": [
+      "test/function/test.py:0:tokenize",
+      "test/function/test.py:8:analyze"
+    ],
+    "tokens": [
+      "test/function/test.py:0:tokenize",
+      "test/function/test.py:8:analyze"
+    ],
+    "for": [
+      "test/function/test.py:0:tokenize",
+      "test/js/range.js:0:range"
+    ],
+    "char": [
+      "test/function/test.py:0:tokenize"
+    ],
+    "append": [
+      "test/function/test.py:0:tokenize"
+    ],
+    "return": [
+      "test/function/test.py:0:tokenize",
+      "test/function/test.py:8:analyze"
+    ],
+    "analyze": [
+      "test/function/test.py:8:analyze"
+    ],
+    "len": [
+      "test/function/test.py:8:analyze"
+    ],
+    "range": [
+      "test/md/ARCHITECTURE.md:0:Range 메모리 버그 분석",
+      "test/md/ARCHITECTURE.md:2:문제",
+      "test/js/range.js:0:range"
+    ],
+    "adr": [
+      "test/md/ARCHITECTURE.md:9:솔루션",
+      "test/js/range.js:0:range",
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "001": [
+      "test/md/ARCHITECTURE.md:9:솔루션",
+      "test/js/range.js:0:range",
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "function": [
+      "test/js/range.js:0:range",
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "start": [
+      "test/js/range.js:0:range",
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "end": [
+      "test/js/range.js:0:range",
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "const": [
+      "test/js/range.js:0:range"
+    ],
+    "arr": [
+      "test/js/range.js:0:range"
+    ],
+    "let": [
+      "test/js/range.js:0:range"
+    ],
+    "rangefixed": [
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "throw": [
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "new": [
+      "test/js/range.js:8:rangeFixed"
+    ],
+    "error": [
+      "test/js/range.js:8:rangeFixed"
+    ]
+  },
+  "adr": []
+}

@@ -27,12 +27,15 @@ class WebhookServer {
    * HMAC 서명 검증
    */
   verifySignature(payload, signature) {
+    // 'sha256=' 접두사 제거
+    const sig = signature.replace(/^sha256=/, '');
+
     const hash = crypto
       .createHmac('sha256', this.secret)
       .update(payload)
       .digest('hex');
 
-    return hash === signature;
+    return hash === sig;
   }
 
   /**
