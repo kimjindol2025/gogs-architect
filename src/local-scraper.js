@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 class LocalScraper {
   constructor(options = {}) {
     this.rootDir = options.rootDir || '/home/kimjin/Desktop/kim';
-    this.maxDepth = options.maxDepth || 3;
+    this.maxDepth = options.maxDepth || 5;  // 깊은 폴더까지 스캔
     this.projects = [];
   }
 
