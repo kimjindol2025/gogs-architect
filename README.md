@@ -2,7 +2,7 @@
 
 > **277개 Gogs 저장소를 살아있는 AI 지식 베이스로 변환하는 자동화 시스템**
 
-**상태**: 🟡 **Phase 5 진행 중** (18/20 단계) | **버전**: 0.5.0 | **날짜**: 2026-03-12
+**상태**: 🟢 **Phase 5 완료** (20/20 단계) | **버전**: 1.0.0 | **날짜**: 2026-03-12
 
 ---
 
@@ -41,10 +41,20 @@
 ```bash
 git clone https://gogs.dclub.kr/kim/gogs-architect.git
 cd gogs-architect
-node --version  # v16+ 필요
 ```
 
-### 2. 환경 설정
+### 2. Self-Hosting 모드 (권장)
+
+```bash
+# FreeLang 자기호스팅 (FreeLang 설치 시)
+./gogs-architect ask "질문"
+./gogs-architect analyze "패턴"
+./gogs-architect status
+
+# Node.js 폴백 (FreeLang 없으면 자동)
+```
+
+### 3. 환경 설정 (선택)
 
 ```bash
 export GOGS_URL=https://gogs.dclub.kr
@@ -52,7 +62,7 @@ export GOGS_TOKEN=7a79f8643f22a401e898780e0780c3ec0a93e674
 export WEBHOOK_PORT=9090
 ```
 
-### 3. CLI 사용
+### 4. CLI 사용
 
 ```bash
 # 질문하기 (RAG 기반 검색)
@@ -80,13 +90,13 @@ node src/cli.js dashboard
 node src/cli.js chat
 ```
 
-### 4. Webhook 서버 시작
+### 5. Webhook 서버 시작
 
 ```bash
 node src/webhook-server.js
 ```
 
-### 5. systemd 서비스 (선택)
+### 6. systemd 서비스 (선택)
 
 ```bash
 sudo bash install.sh
@@ -187,11 +197,11 @@ Step 16: 선제적 제안 ✓
 Step 17: 실시간 대시보드 ✓
 ```
 
-### 🟡 Phase 5: 완성 (90%)
+### 🟢 Phase 5: 완성 (100%)
 ```
 Step 18: 통합 테스트 ✓ (83.3% 통과)
 Step 19: systemd 서비스 ✓
-Step 20: PyFree 자기호스팅 ❌
+Step 20: FreeLang 자기호스팅 ✓
 ```
 
 ---
@@ -271,7 +281,7 @@ node tests/phase5-integration.js
 
 ---
 
-**Gogs AI 아키텍트** v0.5.0
-🟡 18/20 단계 완료 | ✅ Phase 1-4 완성, Phase 5 진행 중 (90%)
+**Gogs AI 아키텍트** v1.0.0 🎉
+🟢 20/20 단계 완료 | ✅ Phase 1-5 완성
 
 [Gogs 저장소](https://gogs.dclub.kr/kim/gogs-architect) | [상세 가이드](./PHASE5_README.md)
