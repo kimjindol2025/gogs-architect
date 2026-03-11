@@ -37,15 +37,41 @@ class KnowledgeBase {
     try {
       if (fs.existsSync(this.dbPath)) {
         const content = fs.readFileSync(this.dbPath, 'utf-8');
-        this.data = JSON.parse(content);
+        const loaded = JSON.parse(content);
+
+        // 요약 정보만 로드된 경우 (메모리 기반 사용)
+        if (loaded.stats && !loaded.chunks) {
+          // 메타데이터만 업데이트
+          this.data.metadata = loaded.metadata || this.data.metadata;
+        } else {
+          // 전체 데이터 로드
+          this.data = loaded;
+        }
       }
     } catch (e) {
-      console.warn(`⚠ KB 로드 실패: ${e.message}`);
+      console.warn(`⚠️  KB 로드 실패: ${e.message} (새로 생성합니다)`);
+      // 로드 실패 시 data 초기화 (이미 constructor에서 했음)
+    }
+
+    // data가 없으면 초기화
+    if (!this.data || !this.data.chunks) {
+      this.data = {
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: '0.1.0'
+        },
+        chunks: [],
+        commits: [],
+        files: [],
+        keywords: {},
+        adr: []
+      };
     }
   }
 
   /**
-   * 디스크에 저장
+   * 디스크에 저장 (청크와 커밋만 저장, 메타 정보는 메모리에만)
    */
   save() {
     const dir = path.dirname(this.dbPath);
@@ -53,8 +79,25 @@ class KnowledgeBase {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    this.data.metadata.updatedAt = new Date().toISOString();
-    fs.writeFileSync(this.dbPath, JSON.stringify(this.data, null, 2));
+    try {
+      // 요약 정보만 저장 (전체 청크는 메모리에만 유지)
+      const summary = {
+        metadata: this.data.metadata,
+        stats: {
+          totalChunks: this.data.chunks.length,
+          totalCommits: this.data.commits.length,
+          uniqueKeywords: Object.keys(this.data.keywords).length,
+          repositories: [...new Set(this.data.chunks.map(c => c.meta.repo))],
+          languages: [...new Set(this.data.chunks.map(c => c.meta.language))]
+        }
+      };
+
+      this.data.metadata.updatedAt = new Date().toISOString();
+      fs.writeFileSync(this.dbPath, JSON.stringify(summary, null, 2));
+      console.log(`✓ 지식 베이스 요약 저장 (${summary.stats.totalChunks}개 청크, 메모리에만 유지)`);
+    } catch (e) {
+      console.warn(`⚠️  저장 실패: ${e.message} (데이터는 메모리에만 유지)`);
+    }
   }
 
   /**
@@ -62,15 +105,36 @@ class KnowledgeBase {
    */
   addChunk(chunk) {
     this.data.chunks.push(chunk);
+    // 키워드 인덱싱은 나중에 buildKeywordIndex()로 한 번에 수행
+  }
 
-    // 키워드 역인덱싱
-    const keywords = this.extractKeywords(chunk.content + ' ' + chunk.name);
-    keywords.forEach(kw => {
-      if (!this.data.keywords[kw]) {
-        this.data.keywords[kw] = [];
+  /**
+   * 모든 청크의 키워드 인덱스 구축 (한 번에 수행)
+   */
+  buildKeywordIndex() {
+    console.log('\n📚 키워드 인덱싱 중...');
+    const startTime = Date.now();
+
+    const tempKeywords = {};
+    this.data.chunks.forEach((chunk, idx) => {
+      if (idx % 50000 === 0 && idx > 0) process.stdout.write(`(${idx})`);
+
+      try {
+        const keywords = this.extractKeywords((chunk.content || '') + ' ' + (chunk.name || ''));
+        keywords.forEach(kw => {
+          if (!tempKeywords[kw]) {
+            tempKeywords[kw] = [];
+          }
+          tempKeywords[kw].push(chunk.id);
+        });
+      } catch (e) {
+        // 개별 청크 키워드 추출 오류 무시
       }
-      this.data.keywords[kw].push(chunk.id);
     });
+
+    this.data.keywords = tempKeywords;
+    const elapsed = Date.now() - startTime;
+    console.log(`\n✓ 키워드 인덱싱 완료: ${Object.keys(tempKeywords).length}개 키워드 (${(elapsed / 1000).toFixed(1)}초)\n`);
   }
 
   /**

@@ -138,15 +138,23 @@ class LocalScraper {
         const lines = block.trim().split('\n');
         if (lines.length === 0) continue;
 
-        const [hash, email, subject, date, ...bodyLines] = lines;
+        // 첫 줄은 format '%h|%ae|%s|%ai|%B'로 구성
+        // hash|email|subject|date는 한 줄에, 나머지는 body
+        const firstLine = lines[0];
+        const [hash, email, subject, date, ...restOfFirstLine] = firstLine.split('|');
+
         if (!hash) continue;
+
+        // body는 format 첫 줄의 남은 부분 + 나머지 줄들
+        const bodyParts = [...restOfFirstLine, ...lines.slice(1)];
+        const body = bodyParts.join('\n').trim();
 
         commits.push({
           hash,
           email,
           subject,
           date,
-          body: bodyLines.join('\n').trim()
+          body
         });
       }
 

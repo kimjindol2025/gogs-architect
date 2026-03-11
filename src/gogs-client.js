@@ -20,10 +20,7 @@ class GogsClient {
   constructor(options = {}) {
     this.url = options.url || process.env.GOGS_URL || 'https://gogs.dclub.kr';
     this.token = options.token || process.env.GOGS_TOKEN;
-
-    if (!this.token) {
-      throw new Error('GOGS_TOKEN 환경변수 또는 token 옵션이 필수입니다');
-    }
+    this.isAuthenticated = !!this.token;
 
     this.maxRetries = options.maxRetries || 3;
     this.retryDelay = options.retryDelay || 1000; // ms
@@ -36,6 +33,10 @@ class GogsClient {
    */
   async request(method, path, body = null, retryCount = 0) {
     return new Promise((resolve, reject) => {
+      if (!this.isAuthenticated) {
+        return reject(new Error('GOGS_TOKEN 환경변수가 설정되지 않았습니다. Gogs 기능을 사용하려면 GOGS_TOKEN을 설정하세요.'));
+      }
+
       const urlObj = new URL(this.url);
       const options = {
         hostname: urlObj.hostname,

@@ -87,19 +87,28 @@ class LocalWatcher {
 
       const event = {
         timestamp: new Date().toISOString(),
-        repo: project.name,
-        owner: 'local',
-        pusher: 'local-watcher',
+        repository: {
+          name: project.name,
+          owner: {
+            username: 'local'
+          }
+        },
+        pusher: {
+          name: 'local-watcher'
+        },
         branch: project.branch,
         commits: commits.map(c => ({
           id: c.hash,
           message: c.subject,
-          author: c.email
+          author: {
+            name: c.email
+          }
         }))
       };
 
       return new Promise((resolve) => {
         const data = JSON.stringify(event);
+        const buffer = Buffer.from(data, 'utf8');
         const options = {
           hostname: 'localhost',
           port: 9998,
@@ -107,7 +116,7 @@ class LocalWatcher {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Content-Length': data.length
+            'Content-Length': buffer.length
           }
         };
 
@@ -123,7 +132,7 @@ class LocalWatcher {
         });
 
         req.on('error', () => resolve());
-        req.write(data);
+        req.write(buffer);
         req.end();
       });
     } catch (err) {
