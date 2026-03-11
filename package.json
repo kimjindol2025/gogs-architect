@@ -1,0 +1,18 @@
+{
+  "name": "gogs-architect",
+  "version": "0.1.0",
+  "description": "Gogs AI 아키텍트 시스템 - 277개 Gogs 저장소를 AI 지식 베이스로 변환",
+  "main": "src/cli.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node tests/test-gogs-client.js",
+    "dev": "node src/webhook-server.js"
+  },
+  "keywords": ["gogs", "ai", "knowledge-base", "architect"],
+  "author": "Claude Code",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
