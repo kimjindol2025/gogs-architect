@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Gogs AI 아키텍트 CLI
+ * Gogs AI 아키텍트 CLI (Phase 3.5)
  *
  * 명령어:
  * - gogs-ai ask "질문"           - 질문 응답 (RAG 기반)
  * - gogs-ai audit                - 종합 아키텍처 감사
  * - gogs-ai route "질문"         - 전문 에이전트 분석
  * - gogs-ai analyze "패턴"       - 코드 패턴 분석
+ * - gogs-ai proactive            - 선제적 설계 제안
  * - gogs-ai status               - 상태 조회
  * - gogs-ai dashboard            - 대시보드
  * - gogs-ai chat                 - 대화형 모드
@@ -22,6 +23,8 @@ import ArchitectPersona from './architect-persona.js';
 import DecisionEngine from './decision-engine.js';
 import TeamRouter from './team-router.js';
 import PatternAnalyzer from './pattern-analyzer.js';
+import ProactiveAgent from './proactive-agent.js';
+import Dashboard from './dashboard.js';
 
 class CLI {
   constructor() {
@@ -33,6 +36,8 @@ class CLI {
     this.engine = new DecisionEngine();
     this.router = new TeamRouter(this.kb, this.embedder);
     this.analyzer = new PatternAnalyzer();
+    this.proactive = new ProactiveAgent(this.kb, this.embedder);
+    this.dashboardService = new Dashboard(this.kb);
   }
 
   /**
@@ -130,8 +135,8 @@ ADR: ${stats.adrCount}개
    */
   async chat() {
     this.log('\n💬 Gogs AI 아키텍트 (대화 모드)\n', 'bright');
-    this.log('명령어: ask, audit, route, analyze, status, dashboard, exit', 'dim');
-    this.log('예: ask "질문" | audit | route "질문" | analyze "패턴"\n', 'dim');
+    this.log('명령어: ask, audit, route, analyze, proactive, status, dashboard, exit', 'dim');
+    this.log('예: ask "질문" | audit | route "질문" | analyze "패턴" | proactive\n', 'dim');
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -156,12 +161,14 @@ ADR: ${stats.adrCount}개
           await this.route(args.join(' '));
         } else if (cmd === 'analyze') {
           await this.analyze(args.join(' '));
+        } else if (cmd === 'proactive') {
+          await this.proactiveAnalysis();
         } else if (cmd === 'status') {
           await this.status();
         } else if (cmd === 'dashboard') {
           await this.dashboard();
         } else if (cmd === 'help') {
-          this.log('명령어: ask, audit, route, analyze, status, dashboard, exit', 'cyan');
+          this.log('명령어: ask, audit, route, analyze, proactive, status, dashboard, exit', 'cyan');
         } else {
           this.log('❌ 알 수 없는 명령어\n', 'yellow');
         }
@@ -258,6 +265,42 @@ ADR: ${stats.adrCount}개
   }
 
   /**
+   * 선제적 제안 분석
+   */
+  async proactiveAnalysis() {
+    this.log('\n🔮 선제적 설계 분석 시작...\n', 'cyan');
+
+    try {
+      // 최근 저장소 조회
+      const repos = await this.gogsClient.getUserRepos(1, 5);
+
+      this.log(`📊 ${repos.length}개 저장소 분석 중...\n`, 'blue');
+
+      // 각 저장소별 분석 (첫 번째만)
+      if (repos.length > 0) {
+        const repo = repos[0];
+        const commits = await this.gogsClient.getCommits(repo.owner.login, repo.name, 1, 50);
+
+        const analysis = await this.proactive.analyze(
+          repo.owner.login,
+          repo.name,
+          commits,
+          []
+        );
+
+        this.log(`✓ 분석 완료\n`, 'green');
+        this.log(`📈 Phase 진도: ${JSON.stringify(analysis.phaseAnalysis, null, 2)}`, 'reset');
+        this.log(`📊 의존성 부채: ${analysis.dependencyDebt}%`, 'reset');
+        this.log(`🧪 테스트 커버리지: 추정 ${analysis.estimatedCoverage}%\n`, 'reset');
+      } else {
+        this.log('❌ 분석할 저장소가 없습니다.\n', 'yellow');
+      }
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
+  }
+
+  /**
    * 박스 출력 (테이블 형식)
    */
   printBox(text, color = 'reset') {
@@ -286,6 +329,7 @@ ADR: ${stats.adrCount}개
       this.log('  gogs-ai audit             - 종합 아키텍처 감사 (decision-engine)', 'cyan');
       this.log('  gogs-ai route "질문"      - 전문 에이전트 분석 (팀 라우터)', 'cyan');
       this.log('  gogs-ai analyze "패턴"    - 코드 패턴 분석 (277개 저장소)', 'cyan');
+      this.log('  gogs-ai proactive         - 선제적 설계 제안 (Phase 분석)', 'cyan');
       this.log('  gogs-ai status            - 상태 조회', 'cyan');
       this.log('  gogs-ai dashboard         - 대시보드', 'cyan');
       this.log('  gogs-ai chat              - 대화형 모드\n', 'cyan');
@@ -303,6 +347,8 @@ ADR: ${stats.adrCount}개
       await this.route(rest);
     } else if (cmd === 'analyze') {
       await this.analyze(rest);
+    } else if (cmd === 'proactive') {
+      await this.proactiveAnalysis();
     } else if (cmd === 'status') {
       await this.status();
     } else if (cmd === 'dashboard') {
