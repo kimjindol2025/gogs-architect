@@ -1,0 +1,34 @@
+[Unit]
+Description=Gogs AI 아키텍트 시스템
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kimjin
+WorkingDirectory=/home/kimjin/Desktop/kim/gogs-architect
+ExecStart=/usr/bin/node src/webhook-server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gogs-architect
+
+# 환경 변수
+Environment="GOGS_URL=https://gogs.dclub.kr"
+Environment="GOGS_TOKEN=7a79f8643f22a401e898780e0780c3ec0a93e674"
+Environment="WEBHOOK_PORT=9090"
+
+# 리소스 제한
+MemoryMax=512M
+CPUQuota=50%
+
+# 보안
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/kimjin/Desktop/kim/gogs-architect/data
+
+[Install]
+WantedBy=multi-user.target
