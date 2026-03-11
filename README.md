@@ -2,7 +2,7 @@
 
 > **277개 Gogs 저장소를 살아있는 AI 지식 베이스로 변환하는 자동화 시스템**
 
-**상태**: ✅ **완료** (20/20 단계) | **버전**: 1.0.0 | **날짜**: 2026-03-12
+**상태**: 🟡 **Phase 4 진행 중** (16/20 단계) | **버전**: 0.4.0 | **날짜**: 2026-03-12
 
 ---
 
@@ -55,8 +55,20 @@ export WEBHOOK_PORT=9090
 ### 3. CLI 사용
 
 ```bash
-# 질문하기
+# 질문하기 (RAG 기반 검색)
 node src/cli.js ask "Range 메모리 버그의 원인은?"
+
+# 종합 아키텍처 감사 (decision-engine)
+node src/cli.js audit
+
+# 전문 에이전트 분석 (팀 라우터: 6개 전문가)
+node src/cli.js route "성능 최적화 방법"
+
+# 코드 패턴 분석 (277개 저장소 검색)
+node src/cli.js analyze "for (let i = 0; i < n; i++) { array[i] += 1; }"
+
+# 선제적 설계 제안 (Phase 분석 + 의존성 부채)
+node src/cli.js proactive
 
 # 상태 확인
 node src/cli.js status
@@ -85,27 +97,28 @@ sudo systemctl status gogs-architect
 
 ## 📊 시스템 구조
 
-### 13개 모듈 (3,500+ 줄 코드)
+### 18개 모듈 (5,000+ 줄 코드)
 
-| Phase | 모듈 | 역할 |
-|-------|------|------|
-| 1 | gogs-client.js | REST API 래퍼 (290줄) |
-| 1 | scraper.js | 저장소 스캔 (200줄) |
-| 1 | parser.js | 코드 파싱 (220줄) |
-| 1 | commit-extractor.js | 커밋 분석 (120줄) |
-| 1 | knowledge-base.js | 지식 베이스 (180줄) |
-| 2 | embedder.js | BM25 임베딩 (200줄) |
-| 2 | rag-engine.js | RAG 검색 (260줄) |
-| 2 | architect-persona.js | AI 페르소나 (250줄) |
-| 2 | claude-client.js | Claude API (180줄) |
-| 3 | cli.js | CLI (200줄) |
-| 3 | webhook-server.js | Webhook (170줄) |
-| 3 | reviewer.js | 코드 리뷰 (180줄) |
-| 3 | issue-bot.js | 이슈 생성 (140줄) |
-| 4 | team-router.js | 팀 라우터 (250줄) |
-| 4 | doc-updater.js | 문서화 (320줄) |
-| 4 | proactive-agent.js | 선제적 분석 (400줄) |
-| 4 | dashboard.js | 대시보드 (280줄) |
+| Phase | 모듈 | 역할 | 상태 |
+|-------|------|------|------|
+| 1 | gogs-client.js | REST API 래퍼 | ✅ |
+| 1 | scraper.js | 저장소 스캔 | ✅ |
+| 1 | parser.js | 코드 파싱 | ✅ |
+| 1 | commit-extractor.js | 커밋 분석 | ✅ |
+| 1 | knowledge-base.js | 지식 베이스 | ✅ |
+| 2 | embedder.js | BM25 임베딩 | ✅ |
+| 2 | rag-engine.js | RAG 검색 | ✅ |
+| 2 | architect-persona.js | AI 페르소나 | ✅ |
+| 2 | claude-client.js | Claude API | ✅ |
+| 3 | cli.js | CLI 인터페이스 | ✅ |
+| 3 | webhook-server.js | Webhook 수신 | ✅ |
+| 3 | reviewer.js | 자동 코드 리뷰 | ✅ |
+| 3 | issue-bot.js | 이슈 자동 생성 | ✅ |
+| 3.5 | pattern-analyzer.js | 패턴 분석 봇 | ✅ NEW |
+| 4 | team-router.js | 팀 라우터 (6 에이전트) | ✅ |
+| 4 | doc-updater.js | 자동 문서화 | ✅ |
+| 4 | proactive-agent.js | 선제적 제안 | ✅ |
+| 4 | dashboard.js | 실시간 대시보드 | ✅ |
 
 ---
 
@@ -139,46 +152,46 @@ sudo systemctl status gogs-architect
 
 ---
 
-## 🎯 20단계 로드맵
+## 🎯 20단계 로드맵 (진행 중)
 
 ### ✅ Phase 1: 데이터 기초 (100%)
 ```
 Step 1: Gogs API 클라이언트 ✓
 Step 2: 저장소 스캔 ✓
-Step 3: 코드 파서 ✓
+Step 3: 코드 파서 (TS/Python/C/FreeLang) ✓
 Step 4: 커밋 분석 ✓
-Step 5: 지식 베이스 ✓
+Step 5: 지식 베이스 + Call Graph ✓
 ```
 
 ### ✅ Phase 2: 지능 (100%)
 ```
-Step 6: BM25 임베딩 ✓
-Step 7: RAG 검색 ✓
-Step 8: AI 페르소나 ✓
-Step 9: Claude API ✓
+Step 6: BM25 임베딩 (npm zero-dependency) ✓
+Step 7: RAG 검색 (하이브리드: 키워드+의미) ✓
+Step 8: 아키텍트 페르소나 ✓
+Step 9: Decision Engine (6가지 알고리즘) ✓
 ```
 
-### ✅ Phase 3: 인터페이스 (100%)
+### ✅ Phase 3: 인터페이스 & 자동화 (100%)
 ```
-Step 10: CLI ✓
-Step 11: Webhook ✓
-Step 12: 코드 리뷰 ✓
-Step 13: 이슈 생성 ✓
-```
-
-### ✅ Phase 4: 자율화 (100%)
-```
-Step 14: 팀 라우터 ✓
-Step 15: 문서화 ✓
-Step 16: 선제적 분석 ✓
-Step 17: 대시보드 ✓
+Step 10: CLI (ask, audit, route, status, dashboard, chat) ✓
+Step 11: Webhook Server (Push 이벤트 + 재인덱싱) ✓
+Step 12: 자동 코드 리뷰 (ADR 검증 + npm 감지 + Phase 검증) ✓
+Step 13: 이슈 자동 생성 (리뷰 기반 + 중복 방지) ✓
 ```
 
-### ✅ Phase 5: 완성 (100%)
+### 🟡 Phase 4: 지능형 자동화 (80%)
 ```
-Step 18: 통합 테스트 ✓
-Step 19: systemd 서비스 ✓
-Step 20: PyFree 준비 ✓
+Step 14: 팀 라우터 (6개 전문 에이전트) ✓
+Step 15: 자동 문서화 ✓
+Step 16: 선제적 제안 ✓
+Step 17: 실시간 대시보드 ✓
+```
+
+### ⬜ Phase 5: 완성 (0%)
+```
+Step 18: 통합 테스트 ❌
+Step 19: systemd 서비스 ❌
+Step 20: PyFree 자기호스팅 ❌
 ```
 
 ---
@@ -221,10 +234,11 @@ gogs-architect/
 
 ### CLI 명령어
 ```bash
-node src/cli.js ask "질문"          # 질문하기
-node src/cli.js status              # 상태 확인
-node src/cli.js dashboard           # 대시보드
-node src/cli.js chat                # 대화형 모드
+node src/cli.js ask "질문"          # RAG 기반 질문 (4초)
+node src/cli.js audit               # 종합 아키텍처 감사 (decision-engine)
+node src/cli.js status              # 지식 베이스 상태 조회
+node src/cli.js dashboard           # 실시간 대시보드
+node src/cli.js chat                # 대화형 모드 (REPL)
 ```
 
 ### 서비스 관리
@@ -251,7 +265,7 @@ ANTHROPIC_API_KEY=... node tests/integration.js
 
 ---
 
-**Gogs AI 아키텍트** v1.0.0
-✅ 20/20 단계 완료 | 🚀 프로덕션 준비 완료
+**Gogs AI 아키텍트** v0.3.0
+🟢 14/20 단계 완료 | ✅ Phase 1-3 완성, Phase 4 진행 중
 
 [Gogs 저장소](https://gogs.dclub.kr/kim/gogs-architect) | [상세 가이드](./PHASE5_README.md)
