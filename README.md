@@ -2,7 +2,7 @@
 
 > **277개 Gogs 저장소를 살아있는 AI 지식 베이스로 변환하는 자동화 시스템**
 
-**상태**: 🟡 **Phase 4 진행 중** (16/20 단계) | **버전**: 0.4.0 | **날짜**: 2026-03-12
+**상태**: 🟡 **Phase 5 진행 중** (18/20 단계) | **버전**: 0.5.0 | **날짜**: 2026-03-12
 
 ---
 
@@ -187,10 +187,10 @@ Step 16: 선제적 제안 ✓
 Step 17: 실시간 대시보드 ✓
 ```
 
-### ⬜ Phase 5: 완성 (0%)
+### 🟡 Phase 5: 완성 (90%)
 ```
-Step 18: 통합 테스트 ❌
-Step 19: systemd 서비스 ❌
+Step 18: 통합 테스트 ✓ (83.3% 통과)
+Step 19: systemd 서비스 ✓
 Step 20: PyFree 자기호스팅 ❌
 ```
 
@@ -232,10 +232,13 @@ gogs-architect/
 
 ## 📞 지원
 
-### CLI 명령어
+### CLI 명령어 (v0.5.0)
 ```bash
 node src/cli.js ask "질문"          # RAG 기반 질문 (4초)
-node src/cli.js audit               # 종합 아키텍처 감사 (decision-engine)
+node src/cli.js audit               # 종합 아키텍처 감사
+node src/cli.js route "질문"        # 전문 에이전트 분석 (6명)
+node src/cli.js analyze "패턴"      # 코드 패턴 분석 (277개 저장소)
+node src/cli.js proactive           # 선제적 설계 제안
 node src/cli.js status              # 지식 베이스 상태 조회
 node src/cli.js dashboard           # 실시간 대시보드
 node src/cli.js chat                # 대화형 모드 (REPL)
@@ -250,7 +253,10 @@ journalctl -u gogs-architect -f       # 로그
 
 ### 테스트
 ```bash
-ANTHROPIC_API_KEY=... node tests/integration.js
+# Phase 5: 통합 테스트 (6개 시나리오, 83.3% 통과)
+node tests/phase5-integration.js
+
+# 결과: RAG 검색, 질문 분류, 패턴 분석, 지식 베이스 등 검증
 ```
 
 ---
@@ -265,7 +271,7 @@ ANTHROPIC_API_KEY=... node tests/integration.js
 
 ---
 
-**Gogs AI 아키텍트** v0.3.0
-🟢 14/20 단계 완료 | ✅ Phase 1-3 완성, Phase 4 진행 중
+**Gogs AI 아키텍트** v0.5.0
+🟡 18/20 단계 완료 | ✅ Phase 1-4 완성, Phase 5 진행 중 (90%)
 
 [Gogs 저장소](https://gogs.dclub.kr/kim/gogs-architect) | [상세 가이드](./PHASE5_README.md)
