@@ -1,0 +1,32 @@
+{
+  "events": [
+    {
+      "timestamp": "2026-03-11T16:45:23.308Z",
+      "repo": "test-repo-001",
+      "owner": "kim",
+      "pusher": "kim",
+      "commits": [
+        {
+          "id": "abc123",
+          "message": "feat: new feature",
+          "author": "Kim"
+        }
+      ],
+      "branch": "main"
+    }
+  ],
+  "repos": {
+    "test-repo-001": {
+      "owner": "kim",
+      "created": "2026-03-11T16:45:23.308Z",
+      "lastPush": "2026-03-11T16:45:23.308Z",
+      "eventCount": 1,
+      "commitCount": 1
+    }
+  },
+  "stats": {
+    "totalEvents": 1,
+    "totalRepos": 1,
+    "lastUpdate": "2026-03-11T16:45:23.308Z"
+  }
+}

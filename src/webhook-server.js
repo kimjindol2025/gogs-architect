@@ -8,6 +8,7 @@
  */
 
 import http from 'http';
+import https from 'https';
 import crypto from 'crypto';
 import GogsClient from './gogs-client.js';
 import Scraper from './scraper.js';
@@ -39,6 +40,48 @@ class WebhookServer {
   }
 
   /**
+   * 이벤트를 중앙 수집기로 포워딩
+   */
+  async forwardToCollector(event) {
+    const collectorUrl = process.env.COLLECTOR_URL || 'http://localhost:9998';
+
+    try {
+      const body = JSON.stringify(event);
+      const url = new URL(`${collectorUrl}/api/event`);
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 80,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': body.length
+        }
+      };
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            console.log(`  ⚠️  수집기 응답: ${res.statusCode}`);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.log(`  ⚠️  수집기 연결 실패: ${error.message}`);
+      });
+
+      req.write(body);
+      req.end();
+    } catch (error) {
+      console.log(`  ⚠️  포워딩 오류: ${error.message}`);
+    }
+  }
+
+  /**
    * Webhook 처리
    */
   async handleWebhook(event) {
@@ -47,6 +90,9 @@ class WebhookServer {
     if (push) {
       // Push 이벤트 처리
       console.log(`\n📨 Push 이벤트: ${event.repository.name}`);
+
+      // 중앙 수집기로 포워딩
+      await this.forwardToCollector(event);
 
       const owner = event.repository.owner.username;
       const repo = event.repository.name;
