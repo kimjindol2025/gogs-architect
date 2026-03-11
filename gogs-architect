@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+
+/**
+ * Gogs AI 아키텍트 — Self-Hosting CLI Wrapper
+ *
+ * 역할:
+ * - Node.js 명령어를 FreeLang으로 변환
+ * - FreeLang 런타임이 없으면 Node.js로 폴백
+ * - 언어 무관 인터페이스 제공
+ */
+
+import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ANSI 색상
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  cyan: '\x1b[36m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m'
+};
+
+function log(text, color = 'reset') {
+  console.log(`${colors[color]}${text}${colors.reset}`);
+}
+
+/**
+ * FreeLang 런타임 확인
+ */
+function hasFreeLangRuntime() {
+  try {
+    const result = spawnSync('which', ['freelang'], { stdio: 'ignore' });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * FreeLang으로 실행 (만약 가능하면)
+ */
+function runWithFreeLang(args) {
+  const scriptPath = join(__dirname, 'src/gogs-architect.free');
+
+  if (!existsSync(scriptPath)) {
+    log('❌ FreeLang 스크립트를 찾을 수 없습니다', 'red');
+    return false;
+  }
+
+  try {
+    const result = spawnSync('freelang', [scriptPath, ...args], { stdio: 'inherit' });
+    return result.status === 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Node.js로 폴백 실행
+ */
+function runWithNodeJS(args) {
+  const cliPath = join(__dirname, 'src/cli.js');
+
+  try {
+    const result = spawnSync('node', [cliPath, ...args], { stdio: 'inherit' });
+    process.exit(result.status || 0);
+  } catch (error) {
+    log(`❌ 오류: ${error.message}`, 'red');
+    process.exit(1);
+  }
+}
+
+/**
+ * 메인 엔트리
+ */
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0) {
+    log('\n📖 Gogs AI 아키텍트 (Self-Hosting)\n', 'bright');
+    log('사용법:', 'cyan');
+    log('  gogs-architect ask "질문"        - 질문 응답', 'cyan');
+    log('  gogs-architect audit             - 아키텍처 감사', 'cyan');
+    log('  gogs-architect route "질문"      - 전문 에이전트', 'cyan');
+    log('  gogs-architect analyze "패턴"    - 패턴 분석', 'cyan');
+    log('  gogs-architect proactive         - 선제적 제안', 'cyan');
+    log('  gogs-architect status            - 상태 조회', 'cyan');
+    log('  gogs-architect dashboard         - 대시보드', 'cyan');
+    log('  gogs-architect chat              - 대화형 모드\n', 'cyan');
+
+    const hasFreeLang = hasFreeLangRuntime();
+    if (hasFreeLang) {
+      log('🚀 FreeLang 런타임: ✅ 활성', 'green');
+      log('실행 모드: FreeLang (자기호스팅)\n', 'cyan');
+    } else {
+      log('🚀 FreeLang 런타임: ❌ 없음', 'yellow');
+      log('실행 모드: Node.js (폴백)\n', 'yellow');
+    }
+
+    return;
+  }
+
+  // 런타임 선택
+  const useFree = hasFreeLangRuntime();
+
+  if (useFree) {
+    log(`\n🚀 FreeLang으로 실행 중...\n`, 'cyan');
+    const success = runWithFreeLang(args);
+
+    if (!success) {
+      log('\n⚠️  FreeLang 실행 실패. Node.js로 폴백...\n', 'yellow');
+      runWithNodeJS(args);
+    }
+  } else {
+    runWithNodeJS(args);
+  }
+}
+
+main().catch(error => {
+  log(`❌ 오류: ${error.message}`, 'red');
+  process.exit(1);
+});
