@@ -25,6 +25,8 @@ import TeamRouter from './team-router.js';
 import PatternAnalyzer from './pattern-analyzer.js';
 import ProactiveAgent from './proactive-agent.js';
 import Dashboard from './dashboard.js';
+import SearchEnhanced from './search-enhanced.js';
+import AutoIndexer from './auto-indexer.js';
 
 class CLI {
   constructor() {
@@ -38,6 +40,8 @@ class CLI {
     this.analyzer = new PatternAnalyzer();
     this.proactive = new ProactiveAgent(this.kb, this.embedder);
     this.dashboardService = new Dashboard(this.kb);
+    this.searchEnhanced = new SearchEnhanced(this.kb, this.embedder, this.analyzer);
+    this.autoIndexer = new AutoIndexer(this.gogsClient, this.kb, this.searchEnhanced);
   }
 
   /**
@@ -135,8 +139,8 @@ ADR: ${stats.adrCount}개
    */
   async chat() {
     this.log('\n💬 Gogs AI 아키텍트 (대화 모드)\n', 'bright');
-    this.log('명령어: ask, audit, route, analyze, proactive, status, dashboard, exit', 'dim');
-    this.log('예: ask "질문" | audit | route "질문" | analyze "패턴" | proactive\n', 'dim');
+    this.log('명령어: ask, audit, route, analyze, search, proactive, agent, status, dashboard, exit', 'dim');
+    this.log('예: ask "질문" | search "키워드" | route "질문" | analyze "패턴" | agent\n', 'dim');
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -161,14 +165,18 @@ ADR: ${stats.adrCount}개
           await this.route(args.join(' '));
         } else if (cmd === 'analyze') {
           await this.analyze(args.join(' '));
+        } else if (cmd === 'search') {
+          await this.search(args.join(' '));
         } else if (cmd === 'proactive') {
           await this.proactiveAnalysis();
+        } else if (cmd === 'agent') {
+          await this.showAgentStatus();
         } else if (cmd === 'status') {
           await this.status();
         } else if (cmd === 'dashboard') {
           await this.dashboard();
         } else if (cmd === 'help') {
-          this.log('명령어: ask, audit, route, analyze, proactive, status, dashboard, exit', 'cyan');
+          this.log('명령어: ask, audit, route, analyze, search, proactive, agent, status, dashboard, exit', 'cyan');
         } else {
           this.log('❌ 알 수 없는 명령어\n', 'yellow');
         }
@@ -265,6 +273,22 @@ ADR: ${stats.adrCount}개
   }
 
   /**
+   * 고급 검색 (사용처 + 호출관계 + 제안)
+   */
+  async search(query) {
+    this.log(`\n🔍 고급 검색 중: "${query}"\n`, 'cyan');
+
+    try {
+      const result = this.searchEnhanced.searchAdvanced(query);
+      const formatted = this.searchEnhanced.formatResult(result);
+      console.log(formatted);
+      this.log('✓ 검색 완료\n', 'green');
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
+  }
+
+  /**
    * 선제적 제안 분석
    */
   async proactiveAnalysis() {
@@ -301,6 +325,58 @@ ADR: ${stats.adrCount}개
   }
 
   /**
+   * 자동 인덱서 에이전트 상태
+   */
+  async showAgentStatus() {
+    this.log('\n🤖 Auto-Indexer 에이전트\n', 'bright');
+
+    try {
+      const status = this.autoIndexer.getStatus();
+      const report = this.autoIndexer.generateReport();
+
+      // 헤더
+      this.log(`${report.title}`, 'cyan');
+      this.log('='.repeat(60), 'dim');
+
+      // 요약
+      this.log('\n📊 통계', 'bright');
+      for (const [key, value] of Object.entries(report.summary)) {
+        this.log(`  ${key}: ${value}`, 'green');
+      }
+
+      // 큐 상태
+      this.log('\n📦 처리 큐', 'bright');
+      this.log(`  대기 중: ${report.queue.대기중}개`, 'yellow');
+      this.log(`  처리 중: ${report.queue.처리중 ? '🟡 Yes' : '🟢 No'}`, 'green');
+
+      // 다음 작업
+      if (status.nextActions.length > 0) {
+        this.log('\n📋 다음 처리 예정', 'bright');
+        status.nextActions.forEach((action, i) => {
+          this.log(`  ${i + 1}. ${action.name} [${action.action}]`, 'dim');
+        });
+      }
+
+      // 헬스 체크
+      this.log('\n💚 헬스', 'bright');
+      this.log(`  상태: ${report.health.상태}`, 'green');
+      if (report.health.다음정기동기) {
+        this.log(`  다음 정기동기: ${report.health.다음정기동기}`, 'dim');
+      }
+
+      this.log('\n설정:', 'cyan');
+      this.log(`  배치 크기: ${status.config.batchSize}개`, 'dim');
+      this.log(`  최대 큐: ${status.config.maxQueueSize}개`, 'dim');
+      this.log(`  정기동기 주기: ${status.config.scheduleInterval / 1000 / 60}분`, 'dim');
+
+      this.log('\n' + '='.repeat(60), 'dim');
+      this.log('✓ 에이전트 정상 작동 중\n', 'green');
+    } catch (error) {
+      this.log(`❌ 오류: ${error.message}\n`, 'red');
+    }
+  }
+
+  /**
    * 박스 출력 (테이블 형식)
    */
   printBox(text, color = 'reset') {
@@ -329,7 +405,9 @@ ADR: ${stats.adrCount}개
       this.log('  gogs-ai audit             - 종합 아키텍처 감사 (decision-engine)', 'cyan');
       this.log('  gogs-ai route "질문"      - 전문 에이전트 분석 (팀 라우터)', 'cyan');
       this.log('  gogs-ai analyze "패턴"    - 코드 패턴 분석 (277개 저장소)', 'cyan');
+      this.log('  gogs-ai search "키워드"   - 고급 검색 (사용처+호출관계+제안)', 'cyan');
       this.log('  gogs-ai proactive         - 선제적 설계 제안 (Phase 분석)', 'cyan');
+      this.log('  gogs-ai agent             - 🤖 자동 인덱서 에이전트 상태', 'cyan');
       this.log('  gogs-ai status            - 상태 조회', 'cyan');
       this.log('  gogs-ai dashboard         - 대시보드', 'cyan');
       this.log('  gogs-ai chat              - 대화형 모드\n', 'cyan');
@@ -347,8 +425,12 @@ ADR: ${stats.adrCount}개
       await this.route(rest);
     } else if (cmd === 'analyze') {
       await this.analyze(rest);
+    } else if (cmd === 'search') {
+      await this.search(rest);
     } else if (cmd === 'proactive') {
       await this.proactiveAnalysis();
+    } else if (cmd === 'agent') {
+      await this.showAgentStatus();
     } else if (cmd === 'status') {
       await this.status();
     } else if (cmd === 'dashboard') {
