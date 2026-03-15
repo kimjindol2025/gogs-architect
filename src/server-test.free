@@ -1,0 +1,25 @@
+// server-simple.free - Minimal test server
+
+fn main() {
+    print("🚀 Starting File Manager on port 13000...")
+
+    vm.http.startServer(13000, fn(method: String, path: String, headers: Map, body: String) -> String {
+        if method == "GET" && path == "/" {
+            return get_dashboard_html()
+        }
+
+        if method == "GET" && path == "/health" {
+            return "{\"status\":\"ok\"}"
+        }
+
+        return "{\"status\":\"error\",\"message\":\"Not found\"}"
+    })
+
+    print("✅ Server started! Visit http://localhost:13000/")
+}
+
+fn get_dashboard_html() -> String {
+    return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>File Manager</title><style>body{font-family:sans-serif;padding:20px;background:#f5f7fa}h1{color:#333}.container{max-width:1200px;margin:0 auto;background:white;padding:20px;border-radius:8px}.sidebar{float:left;width:20%;background:#2c3e50;color:white;padding:15px;border-radius:6px;margin-right:20px}.main{margin-left:21%;}.file-item{padding:10px;border-bottom:1px solid #eee}h3{color:#3498db}</style></head><body><div class=\"container\"><h1>📁 Advanced File Manager</h1><div class=\"sidebar\"><h3>최근 파일</h3><p>document.pdf (2시간 전)</p><p>image.png (4시간 전)</p><p>report.xlsx (1일 전)</p></div><div class=\"main\"><h2>파일 목록</h2><div class=\"file-item\">📄 file1.txt - 1KB</div><div class=\"file-item\">📂 folder1 (디렉토리)</div><div class=\"file-item\">🖼️ image.png - 856KB</div></div></div></body></html>"
+}
+
+main()
