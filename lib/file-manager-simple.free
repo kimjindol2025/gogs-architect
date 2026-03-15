@@ -1,0 +1,34 @@
+use "http-module" as HTTP
+
+fn main(): void {
+  print("")
+  print("╔════════════════════════════════════════════════════════╗")
+  print("║  🚀 FreeLang File Manager (포트 13000)               ║")
+  print("╚════════════════════════════════════════════════════════╝")
+  print("")
+  
+  let server = HTTP.Server(13000)
+  
+  server.route()
+    .get("/", fn(req: HTTP.Request): HTTP.Response {
+      return HTTP.ok("{\"status\":\"ok\",\"message\":\"FreeLang File Manager\"}")
+    })
+    .get("/api/health", fn(req: HTTP.Request): HTTP.Response {
+      return HTTP.ok("{\"status\":\"ok\",\"timestamp\":\"2026-03-15T20:15:00Z\"}")
+    })
+    .post("/api/auth/login", fn(req: HTTP.Request): HTTP.Response {
+      return HTTP.ok("{\"status\":\"ok\",\"token\":\"freelang_jwt_123\",\"user\":{\"username\":\"admin\",\"role\":\"admin\"}}")
+    })
+    .get("/api/fs/list", fn(req: HTTP.Request): HTTP.Response {
+      return HTTP.ok("{\"path\":\"/\",\"items\":[{\"name\":\"freelang\",\"type\":\"dir\",\"icon\":\"📂\"},{\"name\":\"Desktop\",\"type\":\"dir\",\"icon\":\"📂\"}]}")
+    })
+  
+  server.listen(fn(s) {
+    print("✅ 서버 시작됨: http://localhost:" + s.port)
+    print("📍 포트: 13000")
+    print("👤 기본 계정: admin / admin")
+    print("")
+  })
+}
+
+main()

@@ -1,0 +1,126 @@
+// FreeLang v2 HTTP Server - 사용 예제
+// 순수 FreeLang으로 구현된 REST API 서버
+
+use "http-module" as HTTP
+
+fn main(): void {
+  print("🚀 FreeLang v2 REST API Server\n")
+
+  // 1. 서버 생성
+  let server = HTTP.Server(8080)
+
+  // 2. 라우트 등록
+  let router = server.route()
+
+  // GET /
+  // router.get("/", fn(req: HTTP.Request): HTTP.Response {
+  //   return HTTP.ok("{\"message\":\"Welcome to FreeLang HTTP Server\"}")
+  // })
+
+  // GET /api/users
+  // router.get("/api/users", fn(req: HTTP.Request): HTTP.Response {
+  //   let users = "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]"
+  //   return HTTP.ok(users)
+  // })
+
+  // GET /api/users/:id (시뮬레이션)
+  // router.get("/api/users/1", fn(req: HTTP.Request): HTTP.Response {
+  //   let user = "{\"id\":1,\"name\":\"Alice\",\"email\":\"alice@example.com\"}"
+  //   return HTTP.ok(user)
+  // })
+
+  // POST /api/users (시뮬레이션)
+  // router.post("/api/users", fn(req: HTTP.Request): HTTP.Response {
+  //   let new_user = "{\"id\":3,\"name\":\"Charlie\",\"status\":\"created\"}"
+  //   return HTTP.created(new_user)
+  // })
+
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("REST API Routes")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+  print("GET /")
+  print("  → Welcome message\n")
+
+  print("GET /api/users")
+  print("  → List all users\n")
+
+  print("GET /api/users/1")
+  print("  → Get user by ID\n")
+
+  print("POST /api/users")
+  print("  → Create new user\n")
+
+  print("GET /health")
+  print("  → Health check\n")
+
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("Starting Server")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+  // 3. 서버 시작
+  server.listen(fn(s: HTTP.Server): void {
+    print("✅ Server started on http://0.0.0.0:" + s.port)
+    print("✅ Ready to accept HTTP requests\n")
+  })
+
+  // 4. 시뮬레이션: 요청 처리
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("Simulating HTTP Requests")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+  // GET /
+  print("[1] GET / HTTP/1.1")
+  let resp1 = HTTP.ok("{\"message\":\"Welcome to FreeLang HTTP Server\"}")
+  print("→ 200 OK")
+  print("→ " + resp1.serialize() + "\n")
+
+  // GET /api/users
+  print("[2] GET /api/users HTTP/1.1")
+  let users_json = "[{\"id\":1,\"name\":\"Alice\",\"role\":\"admin\"},{\"id\":2,\"name\":\"Bob\",\"role\":\"user\"},{\"id\":3,\"name\":\"Charlie\",\"role\":\"user\"}]"
+  let resp2 = HTTP.ok(users_json)
+  print("→ 200 OK")
+  print("→ Content-Length: " + resp2.headers["Content-Length"])
+  print("→ Users count: 3\n")
+
+  // GET /api/users/1
+  print("[3] GET /api/users/1 HTTP/1.1")
+  let user_json = "{\"id\":1,\"name\":\"Alice\",\"email\":\"alice@example.com\",\"role\":\"admin\",\"created_at\":\"2026-01-01T00:00:00Z\"}"
+  let resp3 = HTTP.ok(user_json)
+  print("→ 200 OK")
+  print("→ " + resp3.serialize() + "\n")
+
+  // POST /api/users
+  print("[4] POST /api/users HTTP/1.1")
+  let new_user = "{\"id\":4,\"name\":\"Diana\",\"email\":\"diana@example.com\",\"role\":\"user\",\"status\":\"created\"}"
+  let resp4 = HTTP.created(new_user)
+  print("→ 201 Created")
+  print("→ " + resp4.serialize() + "\n")
+
+  // GET /health
+  print("[5] GET /health HTTP/1.1")
+  let health = "{\"status\":\"healthy\",\"uptime\":\"100%\",\"memory_usage\":\"~15MB\",\"requests_handled\":4}"
+  let resp5 = HTTP.ok(health)
+  print("→ 200 OK")
+  print("→ " + resp5.serialize() + "\n")
+
+  // GET /notfound
+  print("[6] GET /notfound HTTP/1.1")
+  let resp6 = HTTP.notFound()
+  print("→ 404 Not Found")
+  print("→ " + resp6.serialize() + "\n")
+
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("Server Statistics")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+
+  print("Port: 8080")
+  print("Language: Pure FreeLang v2")
+  print("Requests handled: 6")
+  print("Successful (2xx): 5")
+  print("Not Found (4xx): 1")
+  print("Errors (5xx): 0")
+  print()
+
+  print("✅ FreeLang v2 REST API Server example completed!")
+}

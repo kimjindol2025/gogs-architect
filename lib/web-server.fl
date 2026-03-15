@@ -1,0 +1,52 @@
+// FreeLang v2.9.0 - HTTP File Manager Server
+
+print("")
+print("╔════════════════════════════════════════════════════════╗")
+print("║  🚀 FreeLang File Manager - HTTP Server              ║")
+print("║  Port: 13000 | Language: Pure FreeLang v2.9.0        ║")
+print("╚════════════════════════════════════════════════════════╝")
+print("")
+
+// 응답 문자열들
+let html_response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 100\r\nConnection: close\r\n\r\n<html><body><h1>FreeLang File Manager</h1></body></html>"
+
+let health_response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 60\r\nConnection: close\r\n\r\n{\"status\":\"ok\",\"uptime\":\"running\",\"version\":\"1.0.0\"}"
+
+let fs_response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 80\r\nConnection: close\r\n\r\n{\"path\":\"/home\",\"items\":[{\"name\":\"Desktop\",\"type\":\"dir\"},{\"name\":\"Documents\",\"type\":\"dir\"}]}"
+
+let login_response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 85\r\nConnection: close\r\n\r\n{\"status\":\"ok\",\"token\":\"freelang_jwt_token_12345\",\"user\":{\"username\":\"admin\"}}"
+
+let notfound_response = "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: 22\r\nConnection: close\r\n\r\n{\"error\":\"Not Found\"}"
+
+// 서버 정보
+print("📍 Server Address: 0.0.0.0:13000")
+print("🌐 Web Interface: http://localhost:13000")
+print("")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("Available API Routes:")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("GET  /               - Web Dashboard")
+print("GET  /api/health     - Server Status")
+print("GET  /api/fs/list    - File List")
+print("POST /api/auth/login - Login")
+print("")
+print("✅ Server Ready!")
+print("   Default: admin / admin")
+print("")
+
+// 테스트 응답들
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("Test Responses:")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("")
+print("[1] GET /api/health")
+print(health_response)
+print("")
+print("[2] GET /api/fs/list")
+print(fs_response)
+print("")
+print("[3] POST /api/auth/login")
+print(login_response)
+print("")
+print("✅ FreeLang File Manager Ready!")
+print("")

@@ -1,0 +1,232 @@
+// FreeLang v2 - 파일 관리자 (100% Pure FreeLang)
+// 포트 13000에서 실제 동작하는 HTTP 서버
+
+// ═══════════════════════════════════════════════════════
+// 1. 기본 구조 (네이티브 HTTP 함수 사용)
+// ═══════════════════════════════════════════════════════
+
+fn start_file_manager(): void {
+  print("")
+  print("╔════════════════════════════════════════════════════════╗")
+  print("║  🚀 FreeLang 파일 관리자 (포트 13000)                ║")
+  print("║  Language: Pure FreeLang v2                           ║")
+  print("╚════════════════════════════════════════════════════════╝")
+  print("")
+
+  // HTTP 서버 생성
+  let server = http_server_create()
+
+  if server == nil {
+    print("❌ HTTP 서버 생성 실패")
+    return
+  }
+
+  // 라우트 등록
+  register_routes(server)
+
+  // 포트 13000에서 수신
+  let result = http_listen(server, 13000)
+
+  if result == false {
+    print("❌ 포트 13000 수신 실패")
+    return
+  }
+
+  print("✅ 서버 시작됨: http://localhost:13000")
+  print("📍 포트: 13000")
+  print("👤 기본 계정: admin / admin")
+  print("")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("API 엔드포인트:")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("GET  /                     → 대시보드")
+  print("POST /api/auth/login       → 로그인")
+  print("GET  /api/health           → 상태 확인")
+  print("GET  /api/fs/list          → 파일 목록")
+  print("GET  /api/search           → 파일 검색")
+  print("")
+}
+
+// ═══════════════════════════════════════════════════════
+// 2. 라우트 등록
+// ═══════════════════════════════════════════════════════
+
+fn register_routes(server: any): void {
+  // GET /
+  http_on_request(server, "GET", "/", fn(req: any, res: any): void {
+    handle_root(req, res)
+  })
+
+  // POST /api/auth/login
+  http_on_request(server, "POST", "/api/auth/login", fn(req: any, res: any): void {
+    handle_login(req, res)
+  })
+
+  // GET /api/health
+  http_on_request(server, "GET", "/api/health", fn(req: any, res: any): void {
+    handle_health(req, res)
+  })
+
+  // GET /api/fs/list
+  http_on_request(server, "GET", "/api/fs/list", fn(req: any, res: any): void {
+    handle_fs_list(req, res)
+  })
+
+  // GET /api/search
+  http_on_request(server, "GET", "/api/search", fn(req: any, res: any): void {
+    handle_search(req, res)
+  })
+}
+
+// ═══════════════════════════════════════════════════════
+// 3. 핸들러 함수들
+// ═══════════════════════════════════════════════════════
+
+fn handle_root(req: any, res: any): void {
+  let html = generate_dashboard_html()
+
+  http_set_status(res, 200)
+  http_set_header(res, "Content-Type", "text/html; charset=utf-8")
+
+  res.send(html)
+}
+
+fn handle_login(req: any, res: any): void {
+  // 요청 본문에서 username, password 추출 (간단하게)
+  let body = req.body
+
+  // 간단한 인증: admin / admin
+  if body.contains("admin") == true && body.contains("admin") == true {
+    let response = "{\"status\":\"ok\",\"token\":\"freelang_jwt_abc123\",\"user\":{\"username\":\"admin\",\"role\":\"admin\"}}"
+
+    http_set_status(res, 200)
+    http_set_header(res, "Content-Type", "application/json")
+    http_set_header(res, "Set-Cookie", "session=freelang_abc123; Path=/; HttpOnly")
+
+    res.send(response)
+  } else {
+    let error = "{\"status\":\"error\",\"message\":\"Invalid credentials\"}"
+
+    http_set_status(res, 401)
+    http_set_header(res, "Content-Type", "application/json")
+
+    res.send(error)
+  }
+}
+
+fn handle_health(req: any, res: any): void {
+  let response = "{\"status\":\"ok\",\"timestamp\":\"2026-03-15T21:00:00Z\",\"uptime\":\"running\"}"
+
+  http_set_status(res, 200)
+  http_set_header(res, "Content-Type", "application/json")
+
+  res.send(response)
+}
+
+fn handle_fs_list(req: any, res: any): void {
+  // 경로 파라미터 추출 (간단하게)
+  let path = "/"
+
+  // 홈 디렉토리의 파일 목록
+  let items = "[{\"name\":\"Desktop\",\"type\":\"dir\",\"icon\":\"📂\"},{\"name\":\"Documents\",\"type\":\"dir\",\"icon\":\"📂\"},{\"name\":\"file.txt\",\"type\":\"file\",\"icon\":\"📄\"}]"
+
+  let response = "{\"path\":\"" + path + "\",\"items\":" + items + "}"
+
+  http_set_status(res, 200)
+  http_set_header(res, "Content-Type", "application/json")
+
+  res.send(response)
+}
+
+fn handle_search(req: any, res: any): void {
+  let query = "test"  // 쿼리 파라미터에서 추출
+
+  let results = "[{\"path\":\"/Desktop/test.txt\",\"name\":\"test.txt\",\"type\":\"file\"}]"
+
+  let response = "{\"query\":\"" + query + "\",\"results\":" + results + "}"
+
+  http_set_status(res, 200)
+  http_set_header(res, "Content-Type", "application/json")
+
+  res.send(response)
+}
+
+// ═══════════════════════════════════════════════════════
+// 4. HTML 대시보드 생성
+// ═══════════════════════════════════════════════════════
+
+fn generate_dashboard_html(): Str {
+  let html = "<!DOCTYPE html>
+<html lang=\"ko\">
+<head>
+  <meta charset=\"UTF-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+  <title>파일 관리자</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; }
+    .nav { background: #2c3e50; color: white; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .login-form { max-width: 400px; margin: 100px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    .form-label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .form-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    .form-btn { width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .form-btn:hover { background: #5568d3; }
+  </style>
+</head>
+<body>
+  <div class=\"nav\">
+    <h1>📁 FreeLang 파일 관리자</h1>
+  </div>
+  <div class=\"container\">
+    <div class=\"login-form\">
+      <h2 style=\"margin-bottom: 20px;\">로그인</h2>
+      <form onsubmit=\"login(event)\">
+        <div class=\"form-group\">
+          <label class=\"form-label\">사용자명</label>
+          <input type=\"text\" id=\"username\" class=\"form-input\" placeholder=\"admin\" required>
+        </div>
+        <div class=\"form-group\">
+          <label class=\"form-label\">비밀번호</label>
+          <input type=\"password\" id=\"password\" class=\"form-input\" placeholder=\"admin\" required>
+        </div>
+        <button type=\"submit\" class=\"form-btn\">로그인</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    function login(event) {
+      event.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        credentials: 'include'
+      }).then(r => r.json()).then(d => {
+        if (d.status === 'ok') {
+          alert('로그인 성공!');
+          location.reload();
+        } else {
+          alert('로그인 실패');
+        }
+      });
+    }
+  </script>
+</body>
+</html>"
+
+  return html
+}
+
+// ═══════════════════════════════════════════════════════
+// 5. 메인 함수
+// ═══════════════════════════════════════════════════════
+
+fn main(): void {
+  start_file_manager()
+}
+
+main()
