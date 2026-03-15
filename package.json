@@ -5,9 +5,20 @@
   "main": "src/cli.js",
   "type": "module",
   "scripts": {
-    "start": "node src/cli.js",
+    "start": "NODE_ENV=production node src/api-server-v3.js",
+    "dev": "NODE_ENV=development node src/api-server-v3.js",
     "test": "node tests/test-gogs-client.js",
-    "dev": "node src/webhook-server.js"
+    "test:webhook": "node src/test-webhook-manager.js",
+    "test:monitoring": "node src/test-monitoring-system.js",
+    "deploy": "bash deploy.sh production",
+    "deploy:staging": "bash deploy.sh staging",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop gogs-architect-api",
+    "pm2:restart": "pm2 restart gogs-architect-api",
+    "pm2:logs": "pm2 logs gogs-architect-api",
+    "gogs:setup": "node scripts/setup-gogs-webhooks.js",
+    "lint": "eslint src/ --fix",
+    "docs": "echo '📖 API 문서는 http://localhost:3000/ 을 참고하세요'"
   },
   "keywords": ["gogs", "ai", "knowledge-base", "architect"],
   "author": "Claude Code",

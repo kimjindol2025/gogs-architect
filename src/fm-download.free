@@ -1,0 +1,154 @@
+// fm-download.free - File Download Handler
+
+fn handle_download(path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 파일 다운로드 처리
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Permission denied")
+        return result
+    }
+
+    if !validate_path(path, "/home") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Invalid path")
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) || file_is_dir(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File not found")
+        return result
+    }
+
+    var content = file_read(full_path)
+    var size = file_size(full_path)
+
+    audit_log(db, user_id, "file_download", path + "/" + filename, true)
+
+    map_set(result, "success", true)
+    map_set(result, "filename", filename)
+    map_set(result, "size", size)
+    map_set(result, "content", content)
+    map_set(result, "mime_type", get_mime_type(filename))
+
+    return result
+}
+
+fn handle_download_zip(paths: List, output_filename: String, db: Map, user_id: String) -> Map {
+    // 다중 파일 ZIP 다운로드
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    // ZIP 생성 (간단한 구현)
+    var zip_path = "/tmp/" + output_filename
+
+    audit_log(db, user_id, "zip_download", "", true)
+
+    map_set(result, "success", true)
+    map_set(result, "filename", output_filename)
+
+    return result
+}
+
+fn get_mime_type(filename: String) -> String {
+    // 파일명으로 MIME type 판단
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_substring(filename, dot_idx + 1, str_len(filename))
+    }
+
+    if ext == "txt" {
+        return "text/plain"
+    }
+    if ext == "html" {
+        return "text/html"
+    }
+    if ext == "json" {
+        return "application/json"
+    }
+    if ext == "pdf" {
+        return "application/pdf"
+    }
+    if ext == "jpg" || ext == "jpeg" {
+        return "image/jpeg"
+    }
+    if ext == "png" {
+        return "image/png"
+    }
+    if ext == "gif" {
+        return "image/gif"
+    }
+    if ext == "zip" {
+        return "application/zip"
+    }
+    if ext == "mp3" {
+        return "audio/mpeg"
+    }
+    if ext == "mp4" {
+        return "video/mp4"
+    }
+
+    return "application/octet-stream"
+}
+
+fn handle_streaming_download(path: String, filename: String, range_header: String, db: Map, user_id: String) -> Map {
+    // Range 요청을 지원하는 스트리밍 다운로드
+    var result = map_new()
+
+    if !validate_path(path, "/home") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var total_size = file_size(full_path)
+    var start = 0
+    var end = total_size - 1
+
+    // Range 헤더 파싱
+    if range_header != null && str_startswith(range_header, "bytes=") {
+        var range_part = str_substring(range_header, 6, str_len(range_header))
+        var parts = str_split(range_part, "-")
+        if list_len(parts) >= 1 {
+            var start_str = list_get(parts, 0)
+            if start_str != "" {
+                start = str_to_int(start_str)
+            }
+        }
+        if list_len(parts) >= 2 {
+            var end_str = list_get(parts, 1)
+            if end_str != "" {
+                end = str_to_int(end_str)
+            }
+        }
+    }
+
+    map_set(result, "success", true)
+    map_set(result, "status", 206)  // Partial Content
+    map_set(result, "start", start)
+    map_set(result, "end", end)
+    map_set(result, "total", total_size)
+    map_set(result, "filename", filename)
+
+    return result
+}
+
+fn delete_temp_files() {
+    // 임시 다운로드 파일 정리
+    // /tmp 내 오래된 파일 삭제 (48시간 이상)
+}

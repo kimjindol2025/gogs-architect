@@ -1,0 +1,199 @@
+// fm-search.free - File Search Engine
+
+fn search_files(query: String, search_dir: String, filters: Map) -> List {
+    // 파일 검색 (파일명, 크기, 타입 필터 지원)
+    var results = list_new()
+
+    // 필터 추출
+    var min_size = map_get(filters, "min_size") ?? 0
+    var max_size = map_get(filters, "max_size") ?? 2147483647
+    var file_type = map_get(filters, "type") ?? ""
+
+    // 재귀적 검색
+    search_recursive(search_dir, query, min_size, max_size, file_type, results)
+
+    return results
+}
+
+fn search_recursive(dir: String, query: String, min_size: Int, max_size: Int, file_type: String, results: List) {
+    // 재귀적으로 디렉터리 검색
+    if !file_exists(dir) || !file_is_dir(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        // 파일명이 쿼리와 일치하는지 확인 (대소문자 무시)
+        var lower_name = str_to_lower(file_name)
+        var lower_query = str_to_lower(query)
+
+        if str_contains(lower_name, lower_query) {
+            var size = file_size(full_path)
+            var is_dir = file_is_dir(full_path)
+
+            // 필터 적용
+            if size >= min_size && size <= max_size {
+                if file_type == "" || get_file_type(file_name) == file_type {
+                    var entry = map_new()
+                    map_set(entry, "name", file_name)
+                    map_set(entry, "path", full_path)
+                    map_set(entry, "size", size)
+                    map_set(entry, "is_dir", is_dir)
+                    map_set(entry, "type", get_file_type(file_name))
+                    list_push(results, entry)
+                }
+            }
+        }
+
+        // 디렉터리면 재귀
+        if file_is_dir(full_path) {
+            search_recursive(full_path, query, min_size, max_size, file_type, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn search_by_extension(ext: String, search_dir: String) -> List {
+    // 확장자로 파일 검색
+    var results = list_new()
+
+    var files = fs_ls(search_dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = search_dir + "/" + file_name
+
+        // 확장자 추출
+        var file_ext = ""
+        var dot_idx = str_rfind(file_name, ".")
+        if dot_idx > 0 {
+            file_ext = str_substring(file_name, dot_idx + 1, str_len(file_name))
+        }
+
+        if file_ext == ext {
+            var entry = map_new()
+            map_set(entry, "name", file_name)
+            map_set(entry, "path", full_path)
+            list_push(results, entry)
+        }
+
+        if file_is_dir(full_path) {
+            var sub_results = search_by_extension(ext, full_path)
+            var j = 0
+            while j < list_len(sub_results) {
+                list_push(results, list_get(sub_results, j))
+                j = j + 1
+            }
+        }
+
+        i = i + 1
+    }
+
+    return results
+}
+
+fn search_by_size(min_size: Int, max_size: Int, search_dir: String) -> List {
+    // 파일 크기로 검색
+    var results = list_new()
+
+    var files = fs_ls(search_dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = search_dir + "/" + file_name
+        var size = file_size(full_path)
+
+        if size >= min_size && size <= max_size {
+            var entry = map_new()
+            map_set(entry, "name", file_name)
+            map_set(entry, "path", full_path)
+            map_set(entry, "size", size)
+            list_push(results, entry)
+        }
+
+        if file_is_dir(full_path) {
+            var sub_results = search_by_size(min_size, max_size, full_path)
+            var j = 0
+            while j < list_len(sub_results) {
+                list_push(results, list_get(sub_results, j))
+                j = j + 1
+            }
+        }
+
+        i = i + 1
+    }
+
+    return results
+}
+
+fn search_content(query: String, file_types: List, search_dir: String) -> List {
+    // 파일 내용 검색 (텍스트 파일만)
+    var results = list_new()
+
+    var files = fs_ls(search_dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = search_dir + "/" + file_name
+
+        if !file_is_dir(full_path) {
+            // 텍스트 파일 타입 확인
+            var should_search = false
+            var j = 0
+            while j < list_len(file_types) {
+                if get_file_type(file_name) == list_get(file_types, j) {
+                    should_search = true
+                    break
+                }
+                j = j + 1
+            }
+
+            if should_search {
+                var content = file_read(full_path)
+                if str_contains(content, query) {
+                    var entry = map_new()
+                    map_set(entry, "name", file_name)
+                    map_set(entry, "path", full_path)
+                    map_set(entry, "matches", str_count_occurrences(content, query))
+                    list_push(results, entry)
+                }
+            }
+        }
+
+        if file_is_dir(full_path) {
+            var sub_results = search_content(query, file_types, full_path)
+            var j = 0
+            while j < list_len(sub_results) {
+                list_push(results, list_get(sub_results, j))
+                j = j + 1
+            }
+        }
+
+        i = i + 1
+    }
+
+    return results
+}
+
+fn str_count_occurrences(text: String, pattern: String) -> Int {
+    // 문자열에서 패턴 개수 세기
+    var count = 0
+    var index = 0
+    var pattern_len = str_len(pattern)
+
+    while true {
+        var found = str_find(str_substring(text, index, str_len(text)), pattern)
+        if found == -1 {
+            break
+        }
+        count = count + 1
+        index = index + found + pattern_len
+    }
+
+    return count
+}

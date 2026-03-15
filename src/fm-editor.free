@@ -1,0 +1,194 @@
+// fm-editor.free - Text Editor & Preview
+
+fn handle_file_preview(path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 파일 미리보기 (텍스트, 이미지, 비디오)
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File not found")
+        return result
+    }
+
+    var file_type = get_file_type(filename)
+    var mime = get_mime_type(filename)
+
+    if file_type == "text" {
+        var content = file_read(full_path)
+        map_set(result, "success", true)
+        map_set(result, "type", "text")
+        map_set(result, "content", sanitize_html(content))
+        map_set(result, "mime", mime)
+    } else if file_type == "image" {
+        map_set(result, "success", true)
+        map_set(result, "type", "image")
+        map_set(result, "mime", mime)
+        map_set(result, "size", file_size(full_path))
+    } else if file_type == "video" {
+        map_set(result, "success", true)
+        map_set(result, "type", "video")
+        map_set(result, "mime", mime)
+    } else {
+        map_set(result, "success", true)
+        map_set(result, "type", "binary")
+        map_set(result, "mime", mime)
+    }
+
+    return result
+}
+
+fn handle_file_edit(path: String, filename: String, content: String, db: Map, user_id: String) -> Map {
+    // 파일 편집 및 저장
+    var result = map_new()
+
+    if !check_permission(db, user_id, "write") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Permission denied")
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File not found")
+        return result
+    }
+
+    // 파일 쓰기
+    file_write(full_path, content)
+
+    audit_log(db, user_id, "file_edit", path + "/" + filename, true)
+
+    map_set(result, "success", true)
+    map_set(result, "message", "File saved")
+
+    return result
+}
+
+fn handle_syntax_highlight(content: String, language: String) -> String {
+    // 간단한 구문 하이라이트 (HTML로 반환)
+    var highlighted = sanitize_html(content)
+
+    // 간단한 키워드 강조 (실제로는 더 복잡한 파서 필요)
+    if language == "javascript" || language == "js" {
+        highlighted = highlight_javascript(highlighted)
+    } else if language == "python" || language == "py" {
+        highlighted = highlight_python(highlighted)
+    }
+
+    return highlighted
+}
+
+fn highlight_javascript(code: String) -> String {
+    // JavaScript 구문 강조
+    var keywords = list_new()
+    list_push(keywords, "function")
+    list_push(keywords, "const")
+    list_push(keywords, "let")
+    list_push(keywords, "var")
+    list_push(keywords, "if")
+    list_push(keywords, "else")
+    list_push(keywords, "for")
+    list_push(keywords, "while")
+    list_push(keywords, "return")
+
+    var result = code
+
+    // 간단한 강조 (실제로는 정규식 필요)
+    var i = 0
+    while i < list_len(keywords) {
+        var keyword = list_get(keywords, i)
+        var highlighted = "<span style=\"color: #0066cc; font-weight: bold;\">" + keyword + "</span>"
+        result = str_replace(result, keyword, highlighted)
+        i = i + 1
+    }
+
+    return result
+}
+
+fn highlight_python(code: String) -> String {
+    // Python 구문 강조
+    var keywords = list_new()
+    list_push(keywords, "def")
+    list_push(keywords, "class")
+    list_push(keywords, "import")
+    list_push(keywords, "from")
+    list_push(keywords, "if")
+    list_push(keywords, "else")
+    list_push(keywords, "for")
+    list_push(keywords, "while")
+    list_push(keywords, "return")
+
+    var result = code
+
+    var i = 0
+    while i < list_len(keywords) {
+        var keyword = list_get(keywords, i)
+        var highlighted = "<span style=\"color: #0066cc; font-weight: bold;\">" + keyword + "</span>"
+        result = str_replace(result, keyword, highlighted)
+        i = i + 1
+    }
+
+    return result
+}
+
+fn get_editor_config(filename: String) -> Map {
+    // 파일명에 따라 에디터 설정 반환
+    var config = map_new()
+
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_substring(filename, dot_idx + 1, str_len(filename))
+    }
+
+    if ext == "js" {
+        map_set(config, "language", "javascript")
+        map_set(config, "tabSize", 2)
+    } else if ext == "py" {
+        map_set(config, "language", "python")
+        map_set(config, "tabSize", 4)
+    } else if ext == "json" {
+        map_set(config, "language", "json")
+        map_set(config, "tabSize", 2)
+    } else if ext == "md" {
+        map_set(config, "language", "markdown")
+        map_set(config, "tabSize", 2)
+    } else {
+        map_set(config, "language", "text")
+        map_set(config, "tabSize", 4)
+    }
+
+    map_set(config, "theme", "default")
+    map_set(config, "lineNumbers", true)
+
+    return config
+}
+
+fn validate_text_encoding(content: String) -> Bool {
+    // 텍스트 인코딩 검증
+    // 실제로는 BOM 확인, UTF-8 유효성 등 필요
+    return true
+}
+
+fn estimate_file_size_change(original_size: Int, new_content: String) -> Map {
+    // 파일 저장 전 크기 변화 추정
+    var result = map_new()
+    var new_size = str_len(new_content)
+    var size_diff = new_size - original_size
+
+    map_set(result, "original_size", original_size)
+    map_set(result, "new_size", new_size)
+    map_set(result, "size_diff", size_diff)
+    map_set(result, "percentage_change", (size_diff * 100) / original_size)
+
+    return result
+}

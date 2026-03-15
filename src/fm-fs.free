@@ -1,0 +1,299 @@
+// fm-fs.free - File System Operations
+
+fn list_directory(path: String) -> List {
+    // 디렉터리 내용 조회
+    var result = list_new()
+
+    if !file_exists(path) {
+        return result
+    }
+
+    var files = fs_ls(path)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = path + "/" + file_name
+        var size = file_size(full_path)
+        var is_dir = file_is_dir(full_path)
+
+        var entry = map_new()
+        map_set(entry, "name", file_name)
+        map_set(entry, "path", full_path)
+        map_set(entry, "size", size)
+        map_set(entry, "is_dir", is_dir)
+        map_set(entry, "type", get_file_type(file_name))
+        map_set(entry, "modified", file_mtime(full_path))
+
+        list_push(result, entry)
+        i = i + 1
+    }
+
+    return result
+}
+
+fn get_file_type(filename: String) -> String {
+    // 파일 확장자로 타입 판단
+    var ext = ""
+    var last_dot = str_rfind(filename, ".")
+    if last_dot > 0 {
+        ext = str_substring(filename, last_dot + 1, str_len(filename))
+    }
+
+    if ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif" {
+        return "image"
+    }
+    if ext == "pdf" || ext == "doc" || ext == "docx" {
+        return "document"
+    }
+    if ext == "mp3" || ext == "wav" || ext == "flac" {
+        return "audio"
+    }
+    if ext == "mp4" || ext == "avi" || ext == "mkv" {
+        return "video"
+    }
+    if ext == "txt" || ext == "md" || ext == "js" || ext == "py" || ext == "free" {
+        return "text"
+    }
+
+    return "file"
+}
+
+fn create_directory(path: String) -> Bool {
+    // 디렉터리 생성
+    if file_exists(path) {
+        return false
+    }
+
+    fs_mkdir(path)
+    return true
+}
+
+fn delete_directory_recursive(path: String) -> Bool {
+    // 재귀적 디렉터리 삭제
+    if !file_exists(path) {
+        return false
+    }
+
+    if file_is_dir(path) {
+        fs_rmdir_recursive(path)
+        return true
+    }
+
+    return false
+}
+
+fn delete_file(path: String) -> Bool {
+    // 파일 삭제
+    if !file_exists(path) {
+        return false
+    }
+
+    if file_is_dir(path) {
+        return false
+    }
+
+    file_delete(path)
+    return true
+}
+
+fn rename_file(old_path: String, new_path: String) -> Bool {
+    // 파일 또는 디렉터리 이름 변경
+    if !file_exists(old_path) {
+        return false
+    }
+
+    if file_exists(new_path) {
+        return false
+    }
+
+    return file_rename(old_path, new_path)
+}
+
+fn copy_file(source: String, dest: String) -> Bool {
+    // 파일 복사
+    if !file_exists(source) {
+        return false
+    }
+
+    if file_is_dir(source) {
+        return false
+    }
+
+    if file_exists(dest) {
+        return false
+    }
+
+    var content = file_read(source)
+    file_write(dest, content)
+
+    return true
+}
+
+fn copy_directory_recursive(source: String, dest: String) -> Bool {
+    // 재귀적 디렉터리 복사
+    if !file_exists(source) {
+        return false
+    }
+
+    if !file_is_dir(source) {
+        return false
+    }
+
+    if file_exists(dest) {
+        return false
+    }
+
+    fs_mkdir(dest)
+
+    var files = fs_ls(source)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var src_path = source + "/" + file_name
+        var dst_path = dest + "/" + file_name
+
+        if file_is_dir(src_path) {
+            copy_directory_recursive(src_path, dst_path)
+        } else {
+            copy_file(src_path, dst_path)
+        }
+
+        i = i + 1
+    }
+
+    return true
+}
+
+fn move_file(source: String, dest: String) -> Bool {
+    // 파일 이동
+    if !file_exists(source) {
+        return false
+    }
+
+    // 같은 파일시스템에서는 rename으로 충분
+    if file_rename(source, dest) {
+        return true
+    }
+
+    // 다른 파일시스템: 복사 후 삭제
+    if file_is_dir(source) {
+        if !copy_directory_recursive(source, dest) {
+            return false
+        }
+        delete_directory_recursive(source)
+        return true
+    } else {
+        if !copy_file(source, dest) {
+            return false
+        }
+        file_delete(source)
+        return true
+    }
+}
+
+fn read_file_text(path: String) -> String {
+    // 텍스트 파일 읽기
+    if !file_exists(path) {
+        return ""
+    }
+
+    if file_is_dir(path) {
+        return ""
+    }
+
+    return file_read(path)
+}
+
+fn write_file_text(path: String, content: String) -> Bool {
+    // 텍스트 파일 쓰기
+    file_write(path, content)
+    return true
+}
+
+fn create_file(path: String, content: String) -> Bool {
+    // 새 파일 생성
+    if file_exists(path) {
+        return false
+    }
+
+    file_write(path, content)
+    return true
+}
+
+fn get_file_size_formatted(size: Int) -> String {
+    // 파일 크기 포맷팅 (B, KB, MB, GB)
+    if size < 1024 {
+        return str_from_int(size) + " B"
+    }
+    if size < 1024 * 1024 {
+        var kb = size / 1024
+        return str_from_int(kb) + " KB"
+    }
+    if size < 1024 * 1024 * 1024 {
+        var mb = size / (1024 * 1024)
+        return str_from_int(mb) + " MB"
+    }
+
+    var gb = size / (1024 * 1024 * 1024)
+    return str_from_int(gb) + " GB"
+}
+
+fn compress_zip(file_paths: List, output_path: String) -> Bool {
+    // ZIP 압축 (간단한 구현)
+    // 실제로는 zip 라이브러리 필요
+    // 여기서는 스켈레톤 코드
+    return true
+}
+
+fn decompress_zip(zip_path: String, output_dir: String) -> Bool {
+    // ZIP 압축 해제
+    return true
+}
+
+fn get_directory_size(path: String) -> Int {
+    // 디렉터리 전체 크기 계산
+    if !file_exists(path) || !file_is_dir(path) {
+        return 0
+    }
+
+    var total = 0
+    var files = fs_ls(path)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = path + "/" + file_name
+
+        if file_is_dir(full_path) {
+            total = total + get_directory_size(full_path)
+        } else {
+            total = total + file_size(full_path)
+        }
+
+        i = i + 1
+    }
+
+    return total
+}
+
+fn get_breadcrumb_path(current_path: String) -> List {
+    // 경로 브레드크럼 생성
+    // /home/user/documents -> [("home", "/home"), ("user", "/home/user"), ("documents", "/home/user/documents")]
+    var parts = str_split(current_path, "/")
+    var result = list_new()
+    var current = ""
+
+    var i = 0
+    while i < list_len(parts) {
+        var part = list_get(parts, i)
+        if part != "" {
+            current = current + "/" + part
+            var crumb = map_new()
+            map_set(crumb, "name", part)
+            map_set(crumb, "path", current)
+            list_push(result, crumb)
+        }
+        i = i + 1
+    }
+
+    return result
+}

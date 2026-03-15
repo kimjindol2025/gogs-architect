@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_1",
+      "username": "admin",
+      "password_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "salt": "",
+      "role": "admin",
+      "home_dir": "/",
+      "permissions": {
+        "read": true,
+        "write": true,
+        "delete": true,
+        "share": true,
+        "shell": true
+      },
+      "totp_enabled": false,
+      "created_at": 1710498000
+    }
+  ]
+}

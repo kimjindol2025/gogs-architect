@@ -1,0 +1,199 @@
+// fm-share.free - Share Link Management
+
+fn create_share_link(path: String, filename: String, expires_in_hours: Int, password: String, db: Map, user_id: String) -> Map {
+    // 공유 링크 생성
+    var result = map_new()
+
+    if !check_permission(db, user_id, "share") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Permission denied")
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File not found")
+        return result
+    }
+
+    // 공유 토큰 생성
+    var token = "shlink_" + str_from_int(time_now()) + "_" + str_from_int(random())
+    var expires_at = time_now() + (expires_in_hours * 3600)
+
+    var share = map_new()
+    map_set(share, "token", token)
+    map_set(share, "owner_id", user_id)
+    map_set(share, "path", path + "/" + filename)
+    map_set(share, "expires_at", expires_at)
+    map_set(share, "password_hash", sha256(password) if password != "" else "")
+    map_set(share, "created_at", time_now())
+    map_set(share, "download_count", 0)
+    map_set(share, "last_accessed", null)
+
+    var shares = map_get(db, "shares")
+    list_push(shares, share)
+
+    map_set(result, "success", true)
+    map_set(result, "token", token)
+    map_set(result, "url", "/s/" + token)
+    map_set(result, "expires_at", expires_at)
+
+    return result
+}
+
+fn access_share_link(token: String, password: String, db: Map) -> Map {
+    // 공유 링크 접근
+    var result = map_new()
+
+    var shares = map_get(db, "shares")
+    var share = null
+
+    var i = 0
+    while i < list_len(shares) {
+        var s = list_get(shares, i)
+        if map_get(s, "token") == token {
+            share = s
+            break
+        }
+        i = i + 1
+    }
+
+    if share == null {
+        map_set(result, "success", false)
+        map_set(result, "error", "Share not found")
+        return result
+    }
+
+    // 만료 확인
+    var expires_at = map_get(share, "expires_at")
+    if expires_at < time_now() {
+        map_set(result, "success", false)
+        map_set(result, "error", "Share expired")
+        return result
+    }
+
+    // 비밀번호 확인
+    var password_hash = map_get(share, "password_hash")
+    if password_hash != "" {
+        var provided_hash = sha256(password)
+        if provided_hash != password_hash {
+            map_set(result, "success", false)
+            map_set(result, "error", "Invalid password")
+            return result
+        }
+    }
+
+    // 접근 기록 업데이트
+    map_set(share, "download_count", map_get(share, "download_count") + 1)
+    map_set(share, "last_accessed", time_now())
+
+    map_set(result, "success", true)
+    map_set(result, "path", map_get(share, "path"))
+    map_set(result, "filename", str_substring(map_get(share, "path"), str_rfind(map_get(share, "path"), "/") + 1, str_len(map_get(share, "path"))))
+
+    return result
+}
+
+fn delete_share_link(token: String, db: Map, user_id: String) -> Map {
+    // 공유 링크 삭제
+    var result = map_new()
+
+    var shares = map_get(db, "shares")
+
+    var i = 0
+    while i < list_len(shares) {
+        var s = list_get(shares, i)
+        if map_get(s, "token") == token {
+            if map_get(s, "owner_id") == user_id {
+                list_remove(shares, i)
+                map_set(result, "success", true)
+                return result
+            } else {
+                map_set(result, "success", false)
+                map_set(result, "error", "Permission denied")
+                return result
+            }
+        }
+        i = i + 1
+    }
+
+    map_set(result, "success", false)
+    map_set(result, "error", "Share not found")
+
+    return result
+}
+
+fn list_user_shares(db: Map, user_id: String) -> List {
+    // 사용자의 공유 링크 목록
+    var result = list_new()
+
+    var shares = map_get(db, "shares")
+
+    var i = 0
+    while i < list_len(shares) {
+        var s = list_get(shares, i)
+        if map_get(s, "owner_id") == user_id {
+            var share_info = map_new()
+            map_set(share_info, "token", map_get(s, "token"))
+            map_set(share_info, "path", map_get(s, "path"))
+            map_set(share_info, "expires_at", map_get(s, "expires_at"))
+            map_set(share_info, "download_count", map_get(s, "download_count"))
+            map_set(share_info, "url", "/s/" + map_get(s, "token"))
+            list_push(result, share_info)
+        }
+        i = i + 1
+    }
+
+    return result
+}
+
+fn cleanup_expired_shares(db: Map) {
+    // 만료된 공유 링크 삭제
+    var shares = map_get(db, "shares")
+    var now = time_now()
+
+    var i = 0
+    while i < list_len(shares) {
+        var s = list_get(shares, i)
+        if map_get(s, "expires_at") < now {
+            list_remove(shares, i)
+        } else {
+            i = i + 1
+        }
+    }
+}
+
+fn generate_share_qr_code(token: String) -> String {
+    // QR 코드 생성 (간단한 구현)
+    var url = "http://localhost:13000/s/" + token
+    // 실제로는 QR 코드 라이브러리 필요
+    return url
+}
+
+fn share_statistics(token: String, db: Map) -> Map {
+    // 공유 링크 통계
+    var result = map_new()
+
+    var shares = map_get(db, "shares")
+
+    var i = 0
+    while i < list_len(shares) {
+        var s = list_get(shares, i)
+        if map_get(s, "token") == token {
+            map_set(result, "token", token)
+            map_set(result, "download_count", map_get(s, "download_count"))
+            map_set(result, "created_at", map_get(s, "created_at"))
+            map_set(result, "last_accessed", map_get(s, "last_accessed"))
+            map_set(result, "expires_at", map_get(s, "expires_at"))
+            map_set(result, "is_expired", map_get(s, "expires_at") < time_now())
+            return result
+        }
+        i = i + 1
+    }
+
+    map_set(result, "error", "Share not found")
+
+    return result
+}

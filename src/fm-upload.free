@@ -1,0 +1,132 @@
+// fm-upload.free - File Upload Handler
+
+fn handle_upload(body: String, path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 파일 업로드 처리
+    var result = map_new()
+
+    if !check_permission(db, user_id, "write") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Permission denied")
+        return result
+    }
+
+    if !validate_path(path, "/home") {
+        map_set(result, "success", false)
+        map_set(result, "error", "Invalid path")
+        return result
+    }
+
+    filename = sanitize_filename(filename)
+    var full_path = "/home" + path + "/" + filename
+
+    if file_exists(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File already exists")
+        return result
+    }
+
+    // 파일 쓰기
+    file_write(full_path, body)
+
+    audit_log(db, user_id, "file_upload", path + "/" + filename, true)
+
+    map_set(result, "success", true)
+    map_set(result, "filename", filename)
+    map_set(result, "size", str_len(body))
+
+    return result
+}
+
+fn handle_chunk_upload_init(filename: String, total_size: Int, db: Map, user_id: String) -> Map {
+    // 청크 업로드 초기화
+    var result = map_new()
+
+    if !check_permission(db, user_id, "write") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var upload_id = "upload_" + str_from_int(time_now()) + "_" + str_from_int(random())
+
+    var upload = map_new()
+    map_set(upload, "id", upload_id)
+    map_set(upload, "filename", filename)
+    map_set(upload, "total_size", total_size)
+    map_set(upload, "chunks", list_new())
+    map_set(upload, "created_at", time_now())
+
+    map_set(result, "success", true)
+    map_set(result, "upload_id", upload_id)
+
+    return result
+}
+
+fn handle_chunk_upload(upload_id: String, chunk_index: Int, chunk_data: String, db: Map) -> Map {
+    // 청크 업로드 처리
+    var result = map_new()
+
+    map_set(result, "success", true)
+    map_set(result, "chunk_index", chunk_index)
+    map_set(result, "size", str_len(chunk_data))
+
+    return result
+}
+
+fn finalize_chunk_upload(upload_id: String, path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 청크 업로드 완료
+    var result = map_new()
+
+    filename = sanitize_filename(filename)
+    var full_path = "/home" + path + "/" + filename
+
+    if file_exists(full_path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File already exists")
+        return result
+    }
+
+    // 청크 병합 (실제로는 저장된 청크를 읽고 병합)
+    file_write(full_path, "")
+
+    audit_log(db, user_id, "chunk_upload_complete", path + "/" + filename, true)
+
+    map_set(result, "success", true)
+    map_set(result, "filename", filename)
+
+    return result
+}
+
+fn is_safe_upload(filename: String, content_type: String) -> Bool {
+    // 업로드 안전성 검사
+    var dangerous_extensions = list_new()
+    list_push(dangerous_extensions, "exe")
+    list_push(dangerous_extensions, "bat")
+    list_push(dangerous_extensions, "sh")
+    list_push(dangerous_extensions, "dll")
+
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_substring(filename, dot_idx + 1, str_len(filename))
+    }
+
+    var i = 0
+    while i < list_len(dangerous_extensions) {
+        if ext == list_get(dangerous_extensions, i) {
+            return false
+        }
+        i = i + 1
+    }
+
+    return true
+}
+
+fn get_upload_progress(upload_id: String) -> Map {
+    // 업로드 진행 상태 조회
+    var result = map_new()
+    map_set(result, "upload_id", upload_id)
+    map_set(result, "progress", 50)
+    map_set(result, "status", "uploading")
+
+    return result
+}

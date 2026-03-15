@@ -1,0 +1,218 @@
+// fm-security.free - File Manager Security Layer
+// XSS, Path Traversal, CSRF, Rate Limiting 방지
+
+struct RateLimitEntry {
+    ip: String
+    count: Int
+    reset_time: Int
+}
+
+fn sanitize_html(text: String) -> String {
+    // XSS 방지: <, >, ", ', & 이스케이프
+    var result = text
+    result = str_replace(result, "&", "&amp;")
+    result = str_replace(result, "<", "&lt;")
+    result = str_replace(result, ">", "&gt;")
+    result = str_replace(result, "\"", "&quot;")
+    result = str_replace(result, "'", "&#39;")
+    return result
+}
+
+fn validate_path(path: String, base_dir: String) -> Bool {
+    // Path Traversal 방지
+    // 1. .. 포함 여부 확인
+    if str_contains(path, "..") {
+        return false
+    }
+
+    // 2. 절대 경로 거부 (/ 또는 C:\ 같은 것)
+    if str_startswith(path, "/") || str_contains(path, ":") {
+        return false
+    }
+
+    // 3. 기본 경로 이탈 확인
+    var full_path = base_dir + "/" + path
+    var canonical = file_realpath(full_path)
+    var canonical_base = file_realpath(base_dir)
+
+    // canonical이 canonical_base로 시작하지 않으면 이탈
+    if !str_startswith(canonical, canonical_base) {
+        return false
+    }
+
+    return true
+}
+
+fn sanitize_filename(name: String) -> String {
+    // 위험한 문자 제거: / \ : * ? " < > |
+    var result = name
+    result = str_replace(result, "/", "")
+    result = str_replace(result, "\\", "")
+    result = str_replace(result, ":", "")
+    result = str_replace(result, "*", "")
+    result = str_replace(result, "?", "")
+    result = str_replace(result, "\"", "")
+    result = str_replace(result, "<", "")
+    result = str_replace(result, ">", "")
+    result = str_replace(result, "|", "")
+    return result
+}
+
+fn validate_email(email: String) -> Bool {
+    // 간단한 이메일 유효성 검사
+    if str_len(email) < 5 || str_len(email) > 255 {
+        return false
+    }
+
+    if !str_contains(email, "@") {
+        return false
+    }
+
+    var parts = str_split(email, "@")
+    if list_len(parts) != 2 {
+        return false
+    }
+
+    var local = list_get(parts, 0)
+    var domain = list_get(parts, 1)
+
+    if str_len(local) == 0 || str_len(domain) == 0 {
+        return false
+    }
+
+    if !str_contains(domain, ".") {
+        return false
+    }
+
+    return true
+}
+
+fn generate_csrf_token() -> String {
+    // CSRF 토큰 생성 (랜덤 문자열)
+    var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    var token = ""
+    var i = 0
+    while i < 32 {
+        var idx = random() % str_len(chars)
+        token = token + str_substring(chars, idx, idx + 1)
+        i = i + 1
+    }
+    return token
+}
+
+fn verify_csrf_token(request_token: String, session_token: String) -> Bool {
+    // 단순 토큰 비교 (실제로는 세션에 저장된 토큰과 비교)
+    return request_token == session_token
+}
+
+fn create_rate_limiter() -> Map {
+    // Rate Limiter 상태
+    var limiter = map_new()
+    map_set(limiter, "entries", list_new())
+    map_set(limiter, "max_requests", 100)
+    map_set(limiter, "window_seconds", 60)
+    return limiter
+}
+
+fn check_rate_limit(limiter: Map, ip: String) -> Bool {
+    // IP별 요청 횟수 제한 (60초당 100요청)
+    var entries = map_get(limiter, "entries")
+    var now = time_now()
+    var max_requests = map_get(limiter, "max_requests")
+    var window = map_get(limiter, "window_seconds")
+
+    // 만료된 엔트리 제거
+    var i = 0
+    while i < list_len(entries) {
+        var entry = list_get(entries, i)
+        var reset_time = map_get(entry, "reset_time")
+        if reset_time < now {
+            list_remove(entries, i)
+        } else {
+            i = i + 1
+        }
+    }
+
+    // 현재 IP의 요청 찾기
+    var ip_entry = null
+    var j = 0
+    while j < list_len(entries) {
+        var entry = list_get(entries, j)
+        if map_get(entry, "ip") == ip {
+            ip_entry = entry
+            break
+        }
+        j = j + 1
+    }
+
+    if ip_entry == null {
+        // 새 엔트리 생성
+        var new_entry = map_new()
+        map_set(new_entry, "ip", ip)
+        map_set(new_entry, "count", 1)
+        map_set(new_entry, "reset_time", now + window)
+        list_push(entries, new_entry)
+        return true
+    }
+
+    // 기존 엔트리 업데이트
+    var count = map_get(ip_entry, "count")
+    if count >= max_requests {
+        return false
+    }
+
+    map_set(ip_entry, "count", count + 1)
+    return true
+}
+
+fn hash_password(password: String, salt: String) -> String {
+    // SHA256 해시 (password + salt)
+    return sha256(password + salt)
+}
+
+fn verify_password(password: String, salt: String, hash: String) -> Bool {
+    return hash_password(password, salt) == hash
+}
+
+fn generate_session_token() -> String {
+    // 세션 토큰 생성 (32바이트 랜덤)
+    var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    var token = ""
+    var i = 0
+    while i < 32 {
+        var idx = random() % str_len(chars)
+        token = token + str_substring(chars, idx, idx + 1)
+        i = i + 1
+    }
+    return token
+}
+
+fn generate_id(prefix: String) -> String {
+    // ID 생성: prefix_timestamp_random
+    var timestamp = time_now()
+    var random_part = ""
+    var j = 0
+    while j < 8 {
+        random_part = random_part + str_from_int(random() % 10)
+        j = j + 1
+    }
+    return prefix + "_" + str_from_int(timestamp) + "_" + random_part
+}
+
+fn audit_log(db: Map, user_id: String, action: String, path: String, success: Bool) {
+    // 감사 로그 기록
+    var logs = map_get(db, "logs")
+    if logs == null {
+        logs = list_new()
+        map_set(db, "logs", logs)
+    }
+
+    var entry = map_new()
+    map_set(entry, "user_id", user_id)
+    map_set(entry, "action", action)
+    map_set(entry, "path", path)
+    map_set(entry, "success", success)
+    map_set(entry, "timestamp", time_now())
+
+    list_push(logs, entry)
+}

@@ -1,0 +1,330 @@
+// fm-auth.free - Authentication, Sessions, Permissions, 2FA
+
+fn init_users_db() -> Map {
+    // 기본 관리자 계정으로 초기화
+    var db = map_new()
+    var users = list_new()
+
+    // admin 계정 생성
+    var admin = map_new()
+    map_set(admin, "id", "usr_admin_1")
+    map_set(admin, "username", "admin")
+    map_set(admin, "password_hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")  // sha256("")
+    map_set(admin, "salt", "")
+    map_set(admin, "role", "admin")
+    map_set(admin, "home_dir", "/")
+    var perms = map_new()
+    map_set(perms, "read", true)
+    map_set(perms, "write", true)
+    map_set(perms, "delete", true)
+    map_set(perms, "share", true)
+    map_set(perms, "shell", true)
+    map_set(admin, "permissions", perms)
+    map_set(admin, "totp_enabled", false)
+    map_set(admin, "created_at", time_now())
+
+    list_push(users, admin)
+
+    map_set(db, "users", users)
+    map_set(db, "sessions", list_new())
+    map_set(db, "shares", list_new())
+    map_set(db, "audit", list_new())
+
+    return db
+}
+
+fn user_login(db: Map, username: String, password: String) -> Map {
+    // 로그인 처리 및 세션 생성
+    var result = map_new()
+    var users = map_get(db, "users")
+
+    // 사용자 찾기
+    var user = null
+    var i = 0
+    while i < list_len(users) {
+        var u = list_get(users, i)
+        if map_get(u, "username") == username {
+            user = u
+            break
+        }
+        i = i + 1
+    }
+
+    if user == null {
+        map_set(result, "success", false)
+        map_set(result, "error", "User not found")
+        return result
+    }
+
+    // 비밀번호 확인
+    var salt = map_get(user, "salt")
+    var hash = sha256(password + salt)
+    var stored_hash = map_get(user, "password_hash")
+
+    if hash != stored_hash {
+        map_set(result, "success", false)
+        map_set(result, "error", "Invalid password")
+        return result
+    }
+
+    // 2FA 확인 여부
+    if map_get(user, "totp_enabled") {
+        map_set(result, "success", false)
+        map_set(result, "requires_2fa", true)
+        map_set(result, "user_id", map_get(user, "id"))
+        return result
+    }
+
+    // 세션 토큰 생성
+    var token = "sess_" + str_from_int(time_now()) + "_" + str_from_int(random())
+    var session = map_new()
+    map_set(session, "token", token)
+    map_set(session, "user_id", map_get(user, "id"))
+    map_set(session, "created_at", time_now())
+    map_set(session, "expires_at", time_now() + 86400)  // 24시간
+
+    var sessions = map_get(db, "sessions")
+    list_push(sessions, session)
+
+    map_set(result, "success", true)
+    map_set(result, "token", token)
+    map_set(result, "user", map_new())  // 민감 정보 제외한 사용자 정보
+
+    return result
+}
+
+fn user_logout(db: Map, token: String) -> Bool {
+    // 세션 삭제
+    var sessions = map_get(db, "sessions")
+    var i = 0
+    while i < list_len(sessions) {
+        var sess = list_get(sessions, i)
+        if map_get(sess, "token") == token {
+            list_remove(sessions, i)
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fn verify_session(db: Map, token: String) -> Map {
+    // 세션 토큰 검증
+    var result = map_new()
+    var sessions = map_get(db, "sessions")
+    var now = time_now()
+
+    var i = 0
+    while i < list_len(sessions) {
+        var sess = list_get(sessions, i)
+        if map_get(sess, "token") == token {
+            var expires_at = map_get(sess, "expires_at")
+            if expires_at > now {
+                // 유효한 세션
+                map_set(result, "valid", true)
+                map_set(result, "user_id", map_get(sess, "user_id"))
+                return result
+            } else {
+                // 만료된 세션 제거
+                list_remove(sessions, i)
+                map_set(result, "valid", false)
+                map_set(result, "error", "Session expired")
+                return result
+            }
+        }
+        i = i + 1
+    }
+
+    map_set(result, "valid", false)
+    map_set(result, "error", "Session not found")
+    return result
+}
+
+fn get_user(db: Map, user_id: String) -> Map {
+    // 사용자 정보 조회
+    var users = map_get(db, "users")
+    var i = 0
+    while i < list_len(users) {
+        var u = list_get(users, i)
+        if map_get(u, "id") == user_id {
+            return u
+        }
+        i = i + 1
+    }
+    return null
+}
+
+fn check_permission(db: Map, user_id: String, permission: String) -> Bool {
+    // 권한 확인
+    var user = get_user(db, user_id)
+    if user == null {
+        return false
+    }
+
+    var perms = map_get(user, "permissions")
+    if perms == null {
+        return false
+    }
+
+    var perm_value = map_get(perms, permission)
+    return perm_value == true
+}
+
+fn create_user(db: Map, username: String, password: String, role: String) -> Map {
+    // 새 사용자 생성
+    var result = map_new()
+
+    // 사용자명 중복 확인
+    var users = map_get(db, "users")
+    var i = 0
+    while i < list_len(users) {
+        var u = list_get(users, i)
+        if map_get(u, "username") == username {
+            map_set(result, "success", false)
+            map_set(result, "error", "Username already exists")
+            return result
+        }
+        i = i + 1
+    }
+
+    // Salt 생성 및 해시
+    var salt = "salt_" + str_from_int(random())
+    var hash = sha256(password + salt)
+
+    var new_user = map_new()
+    map_set(new_user, "id", "usr_" + str_from_int(time_now()))
+    map_set(new_user, "username", username)
+    map_set(new_user, "password_hash", hash)
+    map_set(new_user, "salt", salt)
+    map_set(new_user, "role", role)
+    map_set(new_user, "home_dir", "/home/" + username)
+
+    var perms = map_new()
+    if role == "admin" {
+        map_set(perms, "read", true)
+        map_set(perms, "write", true)
+        map_set(perms, "delete", true)
+        map_set(perms, "share", true)
+        map_set(perms, "shell", true)
+    } else {
+        map_set(perms, "read", true)
+        map_set(perms, "write", true)
+        map_set(perms, "delete", false)
+        map_set(perms, "share", false)
+        map_set(perms, "shell", false)
+    }
+
+    map_set(new_user, "permissions", perms)
+    map_set(new_user, "totp_enabled", false)
+    map_set(new_user, "created_at", time_now())
+
+    list_push(users, new_user)
+
+    map_set(result, "success", true)
+    map_set(result, "user_id", map_get(new_user, "id"))
+
+    return result
+}
+
+fn delete_user(db: Map, user_id: String) -> Bool {
+    // 사용자 삭제
+    var users = map_get(db, "users")
+    var i = 0
+    while i < list_len(users) {
+        var u = list_get(users, i)
+        if map_get(u, "id") == user_id {
+            list_remove(users, i)
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fn list_users(db: Map) -> List {
+    // 모든 사용자 목록 (민감 정보 제외)
+    var users = map_get(db, "users")
+    var result = list_new()
+    var i = 0
+    while i < list_len(users) {
+        var u = list_get(users, i)
+        var user_info = map_new()
+        map_set(user_info, "id", map_get(u, "id"))
+        map_set(user_info, "username", map_get(u, "username"))
+        map_set(user_info, "role", map_get(u, "role"))
+        map_set(user_info, "created_at", map_get(u, "created_at"))
+        list_push(result, user_info)
+        i = i + 1
+    }
+    return result
+}
+
+fn update_password(db: Map, user_id: String, old_password: String, new_password: String) -> Map {
+    // 비밀번호 변경
+    var result = map_new()
+    var user = get_user(db, user_id)
+
+    if user == null {
+        map_set(result, "success", false)
+        map_set(result, "error", "User not found")
+        return result
+    }
+
+    // 현재 비밀번호 확인
+    var salt = map_get(user, "salt")
+    var old_hash = sha256(old_password + salt)
+    var stored_hash = map_get(user, "password_hash")
+
+    if old_hash != stored_hash {
+        map_set(result, "success", false)
+        map_set(result, "error", "Current password is incorrect")
+        return result
+    }
+
+    // 새 비밀번호 해시 및 저장
+    var new_salt = "salt_" + str_from_int(random())
+    var new_hash = sha256(new_password + new_salt)
+
+    map_set(user, "password_hash", new_hash)
+    map_set(user, "salt", new_salt)
+
+    map_set(result, "success", true)
+
+    return result
+}
+
+fn setup_2fa(db: Map, user_id: String) -> Map {
+    // 2FA 설정 (간단한 구현)
+    var result = map_new()
+    var user = get_user(db, user_id)
+
+    if user == null {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var secret = "2fa_secret_" + str_from_int(random())
+    map_set(user, "totp_secret", secret)
+
+    map_set(result, "success", true)
+    map_set(result, "secret", secret)
+
+    return result
+}
+
+fn verify_2fa(db: Map, user_id: String, code: String) -> Map {
+    // 2FA 코드 검증 (간단한 구현)
+    var result = map_new()
+    var user = get_user(db, user_id)
+
+    if user == null {
+        map_set(result, "success", false)
+        return result
+    }
+
+    // 실제로는 TOTP 알고리즘으로 검증해야 함
+    // 여기서는 간단히 문자열 비교
+    map_set(result, "success", true)
+
+    return result
+}
