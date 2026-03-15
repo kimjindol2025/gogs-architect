@@ -113,7 +113,175 @@ async function handleRequest(req, res) {
 }
 
 function getDashboardHTML() {
-  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FreeLang File Manager</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fa;color:#333}.container{display:flex;height:100vh}.sidebar{width:280px;background:linear-gradient(180deg,#2c3e50,#1a252f);color:#fff;padding:20px;overflow-y:auto;border-right:1px solid #34495e}.sidebar h2{font-size:18px;margin-bottom:20px}.nav-section{margin-bottom:30px}.nav-label{font-size:12px;color:#95a5a6;margin-bottom:10px;text-transform:uppercase}.nav-item{display:block;padding:10px 15px;margin:5px 0;color:#ecf0f1;text-decoration:none;border-radius:4px;cursor:pointer}.nav-item:hover{background:#34495e}.nav-item.active{background:#3498db;font-weight:bold}.main{flex:1;display:flex;flex-direction:column}.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.header h1{font-size:24px;margin-bottom:5px}.content{flex:1;padding:20px;overflow-y:auto}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:30px}.stat-card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);border-left:4px solid #667eea}.stat-label{font-size:12px;color:#999;margin-bottom:10px}.stat-value{font-size:28px;font-weight:bold}.file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px}.file-item{background:#fff;padding:15px;border-radius:8px;text-align:center;cursor:pointer;transition:all 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.1)}.file-item:hover{transform:translateY(-4px);box-shadow:0 4px 12px rgba(0,0,0,0.15);background:#f9f9f9}.file-icon{font-size:32px;margin-bottom:10px}.file-name{font-size:13px;word-break:break-all}.login-form{max-width:400px;margin:50px auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.form-group{margin-bottom:15px}.form-label{display:block;margin-bottom:5px;font-weight:600}.form-input{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px}.form-input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,0.1)}.form-btn{width:100%;padding:10px;background:#667eea;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer}.form-btn:hover{background:#5568d3}.error{color:#e74c3c;font-size:12px;margin-top:5px}</style></head><body><div class="container"><div class="sidebar"><h2>📁 File Manager</h2><div class="nav-section"><div class="nav-label">Navigation</div><div class="nav-item active" onclick="navigateTo('/') ">📂 Files</div></div><div class="nav-section"><div class="nav-label">User</div><div id="user-info"></div><div class="nav-item" onclick="logout()" id="logout-btn" style="display:none">🚪 Logout</div></div></div><div class="main"><div class="header"><h1 id="page-title">🚀 File Manager</h1></div><div class="content" id="content"><div class="login-form"><h2 style="margin-bottom:20px">Sign In</h2><div class="form-group"><label class="form-label">Username</label><input type="text" id="username" class="form-input" value="admin"></div><div class="form-group"><label class="form-label">Password</label><input type="password" id="password" class="form-input" value="admin"></div><button class="form-btn" onclick="login()">Sign In</button><div id="login-error" class="error"></div></div></div></div></div><script>let isLoggedIn=false;async function checkAuth(){try{const res=await fetch('/api/auth/me');if(res.ok){const data=await res.json();isLoggedIn=true;document.getElementById('login-form').style.display='none';document.getElementById('logout-btn').style.display='block';document.getElementById('user-info').innerHTML='👤 '+data.user.username;navigateTo('/')}}catch(err){}}async function login(){const username=document.getElementById('username').value;const password=document.getElementById('password').value;try{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const data=await res.json();if(res.ok){isLoggedIn=true;document.getElementById('login-form').style.display='none';document.getElementById('logout-btn').style.display='block';document.getElementById('user-info').innerHTML='👤 '+data.user.username;navigateTo('/')}else{document.getElementById('login-error').textContent=data.message||'Login failed'}}catch(err){document.getElementById('login-error').textContent='Error: '+err.message}}async function navigateTo(dir){if(!isLoggedIn)return;try{const res=await fetch('/api/fs/list?path='+encodeURIComponent(dir));const data=await res.json();if(data.error){document.getElementById('content').innerHTML='Error: '+data.error;return}document.getElementById('page-title').textContent='📁 '+(dir==='/'?'Home':data.path);let html='<div class="stats"><div class="stat-card"><div class="stat-label">📦 Total Files</div><div class="stat-value">'+data.items.length+'</div></div></div><div class="file-grid">';for(const item of data.items){html+='<div class="file-item" onclick="navigateTo(\\\''+dir+(dir.endsWith('/')?'':'/'+item.name+'\\\')"><div class="file-icon">'+item.icon+'</div><div class="file-name">'+item.name+'</div></div>'}html+='</div>';document.getElementById('content').innerHTML=html}catch(err){document.getElementById('content').innerHTML='Error: '+err.message}}function logout(){isLoggedIn=false;location.reload()}checkAuth()</script></body></html>`;
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; }
+    .container { display: flex; height: 100vh; }
+    .sidebar { width: 280px; background: linear-gradient(180deg, #2c3e50, #1a252f); color: white; padding: 20px; overflow-y: auto; }
+    .sidebar h2 { font-size: 18px; margin-bottom: 20px; }
+    .nav-item { display: block; padding: 10px 15px; margin: 5px 0; cursor: pointer; border-radius: 4px; color: #ecf0f1; }
+    .nav-item:hover { background: #34495e; }
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; }
+    .header h1 { font-size: 24px; }
+    .content { flex: 1; padding: 20px; overflow-y: auto; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #667eea; }
+    .stat-label { font-size: 12px; color: #999; margin-bottom: 10px; }
+    .stat-value { font-size: 28px; font-weight: bold; color: #333; }
+    .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
+    .file-item { background: white; padding: 15px; border-radius: 8px; text-align: center; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .file-item:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .file-icon { font-size: 32px; margin-bottom: 10px; }
+    .file-name { font-size: 13px; word-break: break-all; }
+    .login-form { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    .form-label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .form-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    .form-input:focus { outline: none; border-color: #667eea; }
+    .form-btn { width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .form-btn:hover { background: #5568d3; }
+    .error { color: #e74c3c; font-size: 12px; margin-top: 5px; }
+    #logout-btn { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <h2>📁 File Manager</h2>
+      <div style="margin-top: 20px;">
+        <div style="font-size: 12px; color: #95a5a6; margin-bottom: 10px;">NAVIGATION</div>
+        <div class="nav-item" onclick="navigateTo('/')">📂 Files</div>
+      </div>
+      <div style="margin-top: 30px;">
+        <div style="font-size: 12px; color: #95a5a6; margin-bottom: 10px;">USER</div>
+        <div id="user-info" style="font-size: 14px; margin-bottom: 10px;"></div>
+        <div class="nav-item" id="logout-btn" onclick="logout()">🚪 Logout</div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="header">
+        <h1 id="page-title">🚀 File Manager</h1>
+      </div>
+      <div class="content" id="content">
+        <div id="login-form" class="login-form">
+          <h2 style="margin-bottom: 20px;">Sign In</h2>
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="username" class="form-input" value="admin">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="password" class="form-input" value="admin">
+          </div>
+          <button class="form-btn" onclick="login()">Sign In</button>
+          <div id="login-error" class="error"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isLoggedIn = false;
+
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          isLoggedIn = true;
+          document.getElementById('login-form').style.display = 'none';
+          document.getElementById('logout-btn').style.display = 'block';
+          document.getElementById('user-info').textContent = '👤 ' + data.user.username;
+          await navigateTo('/');
+        }
+      } catch (err) {
+        console.error('Auth check:', err);
+      }
+    }
+
+    async function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        document.getElementById('login-error').textContent = 'Please enter username and password';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          isLoggedIn = true;
+          document.getElementById('login-form').style.display = 'none';
+          document.getElementById('logout-btn').style.display = 'block';
+          document.getElementById('user-info').textContent = '👤 ' + data.user.username;
+          document.getElementById('login-error').textContent = '';
+          await navigateTo('/');
+        } else {
+          document.getElementById('login-error').textContent = data.message || 'Login failed';
+        }
+      } catch (err) {
+        document.getElementById('login-error').textContent = 'Error: ' + err.message;
+        console.error('Login error:', err);
+      }
+    }
+
+    async function navigateTo(dir) {
+      if (!isLoggedIn) return;
+
+      try {
+        const res = await fetch('/api/fs/list?path=' + encodeURIComponent(dir));
+        const data = await res.json();
+
+        if (data.error) {
+          document.getElementById('content').innerHTML = '<p>Error: ' + data.error + '</p>';
+          return;
+        }
+
+        document.getElementById('page-title').textContent = '📁 ' + (dir === '/' ? 'Home' : data.path);
+
+        let html = '<div class="stats"><div class="stat-card"><div class="stat-label">📦 Total</div><div class="stat-value">' + data.items.length + '</div></div></div>';
+        html += '<div class="file-grid">';
+
+        for (const item of data.items) {
+          const nextPath = dir + (dir.endsWith('/') ? '' : '/') + item.name;
+          if (item.type === 'dir') {
+            html += '<div class="file-item" onclick="navigateTo(' + JSON.stringify(nextPath) + ')"><div class="file-icon">' + item.icon + '</div><div class="file-name">' + item.name + '</div></div>';
+          } else {
+            html += '<div class="file-item"><div class="file-icon">' + item.icon + '</div><div class="file-name">' + item.name + '</div></div>';
+          }
+        }
+
+        html += '</div>';
+        document.getElementById('content').innerHTML = html;
+      } catch (err) {
+        console.error('Navigation error:', err);
+      }
+    }
+
+    function logout() {
+      isLoggedIn = false;
+      location.reload();
+    }
+
+    checkAuth();
+  </script>
+</body>
+</html>`;
 }
 
 const server = http.createServer(handleRequest);
