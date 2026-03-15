@@ -1,0 +1,333 @@
+// ============================================================================
+// File I/O Module - 파일 읽기/쓰기
+// ============================================================================
+// 의존성: std::fs
+// 기능: JSON 파일 저장/로드, 에러 처리
+
+use std::fs::*
+use std::io::*
+
+// ============================================================================
+// PART 1: 파일 I/O 구조체 및 타입
+// ============================================================================
+
+pub struct FileError {
+  code: i32,
+  message: string,
+}
+
+enum FileErrorCode {
+  NotFound = 1,
+  PermissionDenied = 2,
+  InvalidPath = 3,
+  IOError = 4,
+  EncodingError = 5,
+}
+
+// ============================================================================
+// PART 2: 파일 읽기 함수
+// ============================================================================
+
+pub fn read_file(path: string) -> Result<string, FileError>
+  intent "파일을 읽고 문자열로 반환"
+  do
+    // 1. 경로 검증
+    if length(path) == 0
+      return Err(FileError {
+        code: FileErrorCode::InvalidPath,
+        message: "파일 경로가 비어있습니다"
+      })
+    end
+
+    // 2. 파일 존재 확인
+    match file_exists(path)
+      true => {
+        // 3. 파일 읽기
+        match read_file_bytes(path)
+          Ok(bytes) => {
+            // 4. 바이트 → 문자열 변환
+            match bytes_to_string(bytes)
+              Ok(content) => return Ok(content)
+              Err(e) => return Err(FileError {
+                code: FileErrorCode::EncodingError,
+                message: "파일 인코딩 오류: " + e
+              })
+            end
+          }
+          Err(e) => return Err(FileError {
+            code: FileErrorCode::IOError,
+            message: "파일 읽기 실패: " + e
+          })
+        end
+      }
+      false => {
+        return Err(FileError {
+          code: FileErrorCode::NotFound,
+          message: "파일을 찾을 수 없음: " + path
+        })
+      }
+    end
+  end
+
+// ============================================================================
+// PART 3: 파일 쓰기 함수
+// ============================================================================
+
+pub fn write_file(path: string, content: string) -> Result<void, FileError>
+  intent "문자열을 파일에 씀"
+  do
+    // 1. 경로 검증
+    if length(path) == 0
+      return Err(FileError {
+        code: FileErrorCode::InvalidPath,
+        message: "파일 경로가 비어있습니다"
+      })
+    end
+
+    // 2. 부모 디렉토리 생성 확인
+    let dir = extract_directory(path)
+    if length(dir) > 0
+      match create_dir_recursive(dir)
+        Ok(()) => {}
+        Err(e) => {
+          return Err(FileError {
+            code: FileErrorCode::IOError,
+            message: "디렉토리 생성 실패: " + e
+          })
+        }
+      end
+    end
+
+    // 3. 문자열 → 바이트 변환
+    let bytes = string_to_bytes(content)
+
+    // 4. 파일 쓰기
+    match write_file_bytes(path, bytes)
+      Ok(()) => return Ok(void)
+      Err(e) => return Err(FileError {
+        code: FileErrorCode::IOError,
+        message: "파일 쓰기 실패: " + e
+      })
+    end
+  end
+
+// ============================================================================
+// PART 4: 파일 유틸리티 함수
+// ============================================================================
+
+pub fn file_exists(path: string) -> bool
+  intent "파일 존재 여부 확인"
+  do
+    match stat(path)
+      Ok(_) => return true
+      Err(_) => return false
+    end
+  end
+
+pub fn read_json_file(path: string) -> Result<string, FileError>
+  intent "JSON 파일 읽기 및 유효성 검증"
+  do
+    match read_file(path)
+      Ok(content) => {
+        // JSON 유효성 검증 (기본)
+        if is_valid_json(content)
+          return Ok(content)
+        else
+          return Err(FileError {
+            code: FileErrorCode::EncodingError,
+            message: "파일의 JSON 형식이 올바르지 않습니다"
+          })
+        end
+      }
+      Err(e) => return Err(e)
+    end
+  end
+
+pub fn write_json_file(path: string, content: string) -> Result<void, FileError>
+  intent "JSON 파일 쓰기"
+  do
+    // JSON 유효성 검증
+    if !is_valid_json(content)
+      return Err(FileError {
+        code: FileErrorCode::EncodingError,
+        message: "JSON 형식이 올바르지 않습니다"
+      })
+    end
+
+    // 파일 쓰기
+    return write_file(path, content)
+  end
+
+pub fn append_to_file(path: string, content: string) -> Result<void, FileError>
+  intent "파일 끝에 내용 추가"
+  do
+    // 1. 기존 내용 읽기
+    match read_file(path)
+      Ok(existing) => {
+        // 2. 새로운 내용과 결합
+        let new_content = existing + "\n" + content
+
+        // 3. 전체 내용 쓰기
+        return write_file(path, new_content)
+      }
+      Err(e) => {
+        // 파일이 없으면 새로 생성
+        if e.code == FileErrorCode::NotFound
+          return write_file(path, content)
+        else
+          return Err(e)
+        end
+      }
+    end
+  end
+
+// ============================================================================
+// PART 5: 내부 헬퍼 함수
+// ============================================================================
+
+fn read_file_bytes(path: string) -> Result<array<u8>, string>
+  intent "파일을 바이트 배열로 읽기"
+  do
+    // FreeLang std::fs 사용
+    match fs_read(path)
+      Ok(bytes) => return Ok(bytes)
+      Err(e) => return Err(e)
+    end
+  end
+
+fn write_file_bytes(path: string, bytes: array<u8>) -> Result<void, string>
+  intent "바이트 배열을 파일에 쓰기"
+  do
+    // FreeLang std::fs 사용
+    match fs_write(path, bytes)
+      Ok(()) => return Ok(void)
+      Err(e) => return Err(e)
+    end
+  end
+
+fn bytes_to_string(bytes: array<u8>) -> Result<string, string>
+  intent "바이트 배열을 UTF-8 문자열로 변환"
+  do
+    // UTF-8 디코딩
+    match utf8_decode(bytes)
+      Ok(s) => return Ok(s)
+      Err(e) => return Err("UTF-8 디코딩 실패: " + e)
+    end
+  end
+
+fn string_to_bytes(s: string) -> array<u8>
+  intent "문자열을 UTF-8 바이트로 변환"
+  do
+    return utf8_encode(s)
+  end
+
+fn extract_directory(path: string) -> string
+  intent "경로에서 디렉토리 부분만 추출"
+  do
+    // 마지막 '/' 찾기
+    let last_slash = last_index_of(path, "/")
+
+    if last_slash < 0
+      return ""
+    else
+      return substring(path, 0, last_slash)
+    end
+  end
+
+fn create_dir_recursive(path: string) -> Result<void, string>
+  intent "디렉토리 생성 (재귀)"
+  do
+    // FreeLang std::fs 사용
+    match fs_mkdir_recursive(path)
+      Ok(()) => return Ok(void)
+      Err(e) => return Err(e)
+    end
+  end
+
+fn is_valid_json(content: string) -> bool
+  intent "JSON 형식 유효성 검증 (기본)"
+  do
+    // 기본 검증: { 또는 [ 로 시작하고 } 또는 ]로 끝나는지 확인
+    let trimmed = trim(content)
+    let len = length(trimmed)
+
+    if len < 2
+      return false
+    end
+
+    let first = char_at(trimmed, 0)
+    let last = char_at(trimmed, len - 1)
+
+    if (first == '{' && last == '}') || (first == '[' && last == ']')
+      return true
+    else
+      return false
+    end
+  end
+
+fn last_index_of(s: string, substr: string) -> i32
+  intent "부분 문자열의 마지막 인덱스 찾기"
+  do
+    let index = -1
+    let s_len = length(s)
+    let sub_len = length(substr)
+
+    for i = 0; i < s_len - sub_len + 1; i++
+      if substring(s, i, i + sub_len) == substr
+        index = i
+      end
+    end
+
+    return index
+  end
+
+fn substring(s: string, start: i32, end: i32) -> string
+  intent "부분 문자열 추출"
+  do
+    // FreeLang 문자열 자르기
+    return string_slice(s, start, end)
+  end
+
+fn char_at(s: string, index: i32) -> string
+  intent "특정 인덱스의 문자 반환"
+  do
+    // FreeLang 문자 추출
+    return char_to_string(string_get_char(s, index))
+  end
+
+fn trim(s: string) -> string
+  intent "문자열의 좌우 공백 제거"
+  do
+    return string_trim(s)
+  end
+
+// ============================================================================
+// PART 6: 상수
+// ============================================================================
+
+pub let FILE_MAX_SIZE = 104857600  // 100MB
+pub let DEFAULT_ENCODING = "UTF-8"
+pub let BACKUP_EXTENSION = ".bak"
+
+// ============================================================================
+// PART 7: 로깅 함수
+// ============================================================================
+
+pub fn log_file_operation(operation: string, path: string, status: string) -> void
+  intent "파일 작업 로그 기록"
+  do
+    let timestamp = get_current_time()
+    let log_msg = "[" + timestamp + "] " + operation + ": " + path + " (" + status + ")"
+
+    // 콘솔에 출력
+    println(log_msg)
+
+    // TODO: 로그 파일에 기록
+  end
+
+fn get_current_time() -> string
+  intent "현재 시간 반환"
+  do
+    // TODO: 실제 시간 함수 구현
+    return "2026-03-13T12:00:00"
+  end

@@ -1,0 +1,291 @@
+// @freelang/http-server - HTTP Server Module
+// FreeLang v2 표준 라이브러리
+// 순수 FreeLang으로 구현된 HTTP 서버 모듈
+
+module HTTPServer {
+
+  // HTTP 메서드
+  enum HTTPMethod {
+    GET
+    POST
+    PUT
+    DELETE
+    PATCH
+    OPTIONS
+    HEAD
+  }
+
+  // HTTP 상태 코드
+  enum HTTPStatus {
+    OK(200)
+    Created(201)
+    BadRequest(400)
+    NotFound(404)
+    InternalServerError(500)
+  }
+
+  // ─────────────────────────────────────────
+  // HTTP 요청
+  // ─────────────────────────────────────────
+
+  class Request {
+    method: Str
+    path: Str
+    version: Str
+    headers: Map<Str, Str>
+    body: Str
+
+    fn new(method: Str, path: Str): Request {
+      this.method = method
+      this.path = path
+      this.version = "HTTP/1.1"
+      this.headers = {}
+      this.body = ""
+      return this
+    }
+
+    fn setHeader(key: Str, value: Str): Request {
+      this.headers[key] = value
+      return this
+    }
+
+    fn setBody(body: Str): Request {
+      this.body = body
+      return this
+    }
+
+    fn getHeader(key: Str): Str {
+      let val = this.headers[key]
+      return if val != null then val else ""
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // HTTP 응답
+  // ─────────────────────────────────────────
+
+  class Response {
+    status_code: int
+    status_text: Str
+    headers: Map<Str, Str>
+    body: Str
+
+    fn new(code: int, text: Str): Response {
+      this.status_code = code
+      this.status_text = text
+      this.headers = {}
+      this.body = ""
+      this.headers["Content-Type"] = "application/json"
+      return this
+    }
+
+    fn setHeader(key: Str, value: Str): Response {
+      this.headers[key] = value
+      return this
+    }
+
+    fn setBody(body: Str): Response {
+      this.body = body
+      this.headers["Content-Length"] = body.length.toString()
+      return this
+    }
+
+    fn json(data: Str): Response {
+      this.headers["Content-Type"] = "application/json"
+      this.body = data
+      this.headers["Content-Length"] = data.length.toString()
+      return this
+    }
+
+    fn text(data: Str): Response {
+      this.headers["Content-Type"] = "text/plain"
+      this.body = data
+      this.headers["Content-Length"] = data.length.toString()
+      return this
+    }
+
+    fn html(data: Str): Response {
+      this.headers["Content-Type"] = "text/html"
+      this.body = data
+      this.headers["Content-Length"] = data.length.toString()
+      return this
+    }
+
+    fn serialize(): Str {
+      let response = "HTTP/1.1 " + this.status_code + " " + this.status_text + "\r\n"
+
+      // 헤더 추가
+      for header_key in this.headers {
+        let header_val = this.headers[header_key]
+        response = response + header_key + ": " + header_val + "\r\n"
+      }
+
+      response = response + "\r\n"
+      response = response + this.body
+
+      return response
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // HTTP 요청 파서
+  // ─────────────────────────────────────────
+
+  class Parser {
+    fn parseRequest(raw: Str): Request {
+      let lines = this.splitLines(raw)
+      let req = Request("GET", "/")
+
+      if lines.length > 0 {
+        let parts = this.split(lines[0], " ")
+        if parts.length >= 3 {
+          req.method = parts[0]
+          req.path = parts[1]
+          req.version = parts[2]
+        }
+      }
+
+      return req
+    }
+
+    fn splitLines(str: Str): Array<Str> {
+      let lines: Array<Str> = []
+      let current = ""
+      let i = 0
+
+      while i < str.length {
+        if str[i] == "\r" && i + 1 < str.length && str[i + 1] == "\n" {
+          lines.push(current)
+          current = ""
+          i = i + 2
+        } else if str[i] == "\n" {
+          lines.push(current)
+          current = ""
+          i = i + 1
+        } else {
+          current = current + str[i]
+          i = i + 1
+        }
+      }
+
+      if current.length > 0 {
+        lines.push(current)
+      }
+
+      return lines
+    }
+
+    fn split(str: Str, delimiter: Str): Array<Str> {
+      let parts: Array<Str> = []
+      let current = ""
+      let i = 0
+
+      while i < str.length {
+        if str[i] == delimiter {
+          if current.length > 0 {
+            parts.push(current)
+            current = ""
+          }
+          i = i + 1
+        } else {
+          current = current + str[i]
+          i = i + 1
+        }
+      }
+
+      if current.length > 0 {
+        parts.push(current)
+      }
+
+      return parts
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // HTTP 라우터
+  // ─────────────────────────────────────────
+
+  class Router {
+    routes: Map<Str, any>
+
+    fn new(): Router {
+      this.routes = {}
+      return this
+    }
+
+    fn get(path: Str, handler: any): Router {
+      this.routes["GET:" + path] = handler
+      return this
+    }
+
+    fn post(path: Str, handler: any): Router {
+      this.routes["POST:" + path] = handler
+      return this
+    }
+
+    fn put(path: Str, handler: any): Router {
+      this.routes["PUT:" + path] = handler
+      return this
+    }
+
+    fn delete(path: Str, handler: any): Router {
+      this.routes["DELETE:" + path] = handler
+      return this
+    }
+
+    fn match(method: Str, path: Str): any {
+      let key = method + ":" + path
+      return this.routes[key]
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // HTTP 서버
+  // ─────────────────────────────────────────
+
+  class Server {
+    port: int
+    router: Router
+
+    fn new(port: int): Server {
+      this.port = port
+      this.router = Router()
+      return this
+    }
+
+    fn route(): Router {
+      return this.router
+    }
+
+    fn listen(callback: any): void {
+      print("HTTP Server listening on port " + this.port)
+      if callback != null {
+        callback(this)
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // 헬퍼 함수
+  // ─────────────────────────────────────────
+
+  fn ok(body: Str): Response {
+    return Response(200, "OK").json(body)
+  }
+
+  fn created(body: Str): Response {
+    return Response(201, "Created").json(body)
+  }
+
+  fn badRequest(error: Str): Response {
+    return Response(400, "Bad Request").json("{\"error\":\"" + error + "\"}")
+  }
+
+  fn notFound(): Response {
+    return Response(404, "Not Found").json("{\"error\":\"Not Found\"}")
+  }
+
+  fn internalError(error: Str): Response {
+    return Response(500, "Internal Server Error").json("{\"error\":\"" + error + "\"}")
+  }
+}

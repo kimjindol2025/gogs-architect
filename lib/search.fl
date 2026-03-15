@@ -1,0 +1,511 @@
+// ============================================================================
+// Search Module - 고급 검색 엔진
+// ============================================================================
+// 기능: 전문 검색, 필터링, 페이지네이션, 검색 통계
+// 성능: O(n) 순회, 복합 쿼리 지원
+
+use std::io::*
+
+// ============================================================================
+// PART 1: 검색 관련 구조체
+// ============================================================================
+
+pub struct SearchQuery {
+  keyword: string,
+  filters: map<string, string>,
+  sort_by: string,  // "date", "relevance", "views", "likes"
+  sort_order: string,  // "asc", "desc"
+  page: i32,
+  page_size: i32,
+  include_unpublished: bool
+}
+
+pub struct SearchResult {
+  post_id: i32,
+  title: string,
+  description: string,
+  relevance_score: f64,
+  match_count: i32
+}
+
+pub struct SearchPageResult {
+  query: string,
+  results: array<SearchResult>,
+  total_count: i32,
+  page: i32,
+  page_size: i32,
+  total_pages: i32,
+  execution_time_ms: i32
+}
+
+pub struct SearchIndex {
+  word: string,
+  post_ids: array<i32>,
+  frequency: i32
+}
+
+pub struct SearchStats {
+  total_searches: i32,
+  total_results: i32,
+  avg_execution_time_ms: f64,
+  popular_keywords: array<string>
+}
+
+// ============================================================================
+// PART 2: 전역 검색 인덱스
+// ============================================================================
+
+pub let GLOBAL_SEARCH_INDEX = {}  // map<string, SearchIndex>
+pub let GLOBAL_SEARCH_STATS = SearchStats {
+  total_searches: 0,
+  total_results: 0,
+  avg_execution_time_ms: 0.0,
+  popular_keywords: []
+}
+
+// ============================================================================
+// PART 3: 기본 검색 함수
+// ============================================================================
+
+pub fn search_posts(posts: array<Post>, query: SearchQuery) -> Result<SearchPageResult, string>
+  intent "포스트 검색 (필터, 정렬, 페이지네이션)"
+  do
+    let start_time = get_current_time_ms()
+
+    // 1. 키워드로 필터링
+    let filtered_posts: array<Post> = []
+    for i = 0; i < length(posts); i++
+      let post = posts[i]
+
+      // 공개 여부 확인
+      if !query.include_unpublished && !post.is_published
+        continue
+      end
+
+      // 키워드 매칭
+      if matches_keyword(post, query.keyword)
+        filtered_posts = array_append(filtered_posts, post)
+      end
+    end
+
+    // 2. 추가 필터 적용
+    filtered_posts = apply_filters(filtered_posts, query.filters)
+
+    // 3. 정렬
+    filtered_posts = sort_posts(filtered_posts, query.sort_by, query.sort_order)
+
+    // 4. 페이지네이션
+    let total_count = length(filtered_posts)
+    let total_pages = (total_count + query.page_size - 1) / query.page_size
+    let start_idx = (query.page - 1) * query.page_size
+    let end_idx = start_idx + query.page_size
+
+    let page_posts: array<Post> = []
+    for i = start_idx; i < end_idx && i < total_count; i++
+      page_posts = array_append(page_posts, filtered_posts[i])
+    end
+
+    // 5. 검색 결과 생성
+    let results: array<SearchResult> = []
+    for i = 0; i < length(page_posts); i++
+      let post = page_posts[i]
+      let score = calculate_relevance(post, query.keyword)
+
+      let result = SearchResult {
+        post_id: post.id,
+        title: post.title,
+        description: post.description,
+        relevance_score: score,
+        match_count: count_matches(post, query.keyword)
+      }
+
+      results = array_append(results, result)
+    end
+
+    // 6. 통계 업데이트
+    let end_time = get_current_time_ms()
+    let exec_time = end_time - start_time
+    update_search_stats(query.keyword, length(results), exec_time)
+
+    let page_result = SearchPageResult {
+      query: query.keyword,
+      results: results,
+      total_count: total_count,
+      page: query.page,
+      page_size: query.page_size,
+      total_pages: total_pages,
+      execution_time_ms: exec_time
+    }
+
+    println("🔍 검색 완료: \"" + query.keyword + "\" → " + int_to_string(length(results)) + "개 (" + int_to_string(exec_time) + "ms)")
+    return Ok(page_result)
+  end
+
+// ============================================================================
+// PART 4: 검색 필터링 함수
+// ============================================================================
+
+fn matches_keyword(post: Post, keyword: string) -> bool
+  intent "포스트가 키워드와 일치하는지 확인"
+  do
+    if length(keyword) == 0
+      return true
+    end
+
+    // 대소문자 무시 검색
+    let lower_keyword = to_lowercase(keyword)
+    let lower_title = to_lowercase(post.title)
+    let lower_desc = to_lowercase(post.description)
+    let lower_content = to_lowercase(post.content)
+
+    // OR 검색 (제목, 설명, 본문)
+    if contains(lower_title, lower_keyword)
+      return true
+    end
+
+    if contains(lower_desc, lower_keyword)
+      return true
+    end
+
+    if contains(lower_content, lower_keyword)
+      return true
+    end
+
+    return false
+  end
+
+fn apply_filters(posts: array<Post>, filters: map<string, string>) -> array<Post>
+  intent "맵 기반 필터 적용"
+  do
+    let result: array<Post> = posts
+
+    // author 필터
+    if filters.has_key("author")
+      let author = filters["author"]
+      result = filter_by_author(result, author)
+    end
+
+    // date 필터 (yyyy-mm-dd)
+    if filters.has_key("date_from")
+      let date_from = filters["date_from"]
+      result = filter_by_date_range(result, date_from, "")
+    end
+
+    // views 필터 (최소 조회수)
+    if filters.has_key("min_views")
+      let min_views = string_to_int(filters["min_views"])
+      result = filter_by_min_views(result, min_views)
+    end
+
+    return result
+  end
+
+fn filter_by_author(posts: array<Post>, author: string) -> array<Post>
+  intent "작성자로 필터링"
+  do
+    let result: array<Post> = []
+    for i = 0; i < length(posts); i++
+      if posts[i].author == author
+        result = array_append(result, posts[i])
+      end
+    end
+    return result
+  end
+
+fn filter_by_date_range(posts: array<Post>, date_from: string, date_to: string) -> array<Post>
+  intent "날짜 범위로 필터링"
+  do
+    let result: array<Post> = []
+    for i = 0; i < length(posts); i++
+      let post = posts[i]
+      if compare_dates(post.created_at, date_from) >= 0
+        if length(date_to) == 0 || compare_dates(post.created_at, date_to) <= 0
+          result = array_append(result, post)
+        end
+      end
+    end
+    return result
+  end
+
+fn filter_by_min_views(posts: array<Post>, min_views: i32) -> array<Post>
+  intent "최소 조회수로 필터링"
+  do
+    let result: array<Post> = []
+    for i = 0; i < length(posts); i++
+      if posts[i].views >= min_views
+        result = array_append(result, posts[i])
+      end
+    end
+    return result
+  end
+
+// ============================================================================
+// PART 5: 정렬 함수
+// ============================================================================
+
+fn sort_posts(posts: array<Post>, sort_by: string, order: string) -> array<Post>
+  intent "포스트 배열 정렬"
+  do
+    let result = posts  // TODO: 실제 정렬 알고리즘
+
+    match sort_by
+      "date" => {
+        // 날짜순 정렬
+        println("📅 정렬: 날짜순")
+      }
+      "views" => {
+        // 조회수순 정렬
+        println("👁️ 정렬: 조회수순")
+      }
+      "likes" => {
+        // 좋아요순 정렬
+        println("❤️ 정렬: 좋아요순")
+      }
+      _ => {}
+    end
+
+    return result
+  end
+
+// ============================================================================
+// PART 6: 관련도 계산
+// ============================================================================
+
+fn calculate_relevance(post: Post, keyword: string) -> f64
+  intent "포스트와 키워드의 관련도 점수 계산 (0.0~1.0)"
+  do
+    let score = 0.0
+
+    let lower_keyword = to_lowercase(keyword)
+    let lower_title = to_lowercase(post.title)
+
+    // 제목에서의 일치도 (가중치 높음)
+    if contains(lower_title, lower_keyword)
+      score = score + 0.7
+    end
+
+    // 설명에서의 일치도
+    if contains(to_lowercase(post.description), lower_keyword)
+      score = score + 0.2
+    end
+
+    // 조회수 & 좋아요 (인기도 가중치)
+    let popularity = (post.views + post.likes) as f64
+    if popularity > 100.0
+      score = score + 0.1
+    end
+
+    return score
+  end
+
+fn count_matches(post: Post, keyword: string) -> i32
+  intent "포스트에서 키워드가 몇 번 나타나는지 카운트"
+  do
+    let count = 0
+    let lower_keyword = to_lowercase(keyword)
+
+    // 제목에서 카운트
+    count = count + count_occurrences(to_lowercase(post.title), lower_keyword)
+
+    // 설명에서 카운트
+    count = count + count_occurrences(to_lowercase(post.description), lower_keyword)
+
+    return count
+  end
+
+fn count_occurrences(text: string, pattern: string) -> i32
+  intent "텍스트에서 패턴이 나타난 횟수"
+  do
+    let count = 0
+    let pattern_len = length(pattern)
+    let text_len = length(text)
+
+    for i = 0; i < text_len - pattern_len + 1; i++
+      if substring(text, i, i + pattern_len) == pattern
+        count = count + 1
+      end
+    end
+
+    return count
+  end
+
+// ============================================================================
+// PART 7: 인덱싱 & 통계
+// ============================================================================
+
+pub fn build_search_index(posts: array<Post>) -> Result<void, string>
+  intent "포스트 배열로부터 검색 인덱스 구축"
+  do
+    GLOBAL_SEARCH_INDEX = {}
+
+    for i = 0; i < length(posts); i++
+      let post = posts[i]
+
+      // 제목 인덱싱
+      index_words(to_lowercase(post.title), post.id)
+
+      // 설명 인덱싱
+      index_words(to_lowercase(post.description), post.id)
+    end
+
+    println("📑 검색 인덱스 구축 완료: " + int_to_string(length(posts)) + "개 포스트")
+    return Ok(void)
+  end
+
+fn index_words(text: string, post_id: i32) -> void
+  intent "텍스트의 단어들을 인덱스에 추가"
+  do
+    let words = split_into_words(text)
+
+    for i = 0; i < length(words); i++
+      let word = words[i]
+
+      if GLOBAL_SEARCH_INDEX.has_key(word)
+        // 기존 항목에 post_id 추가 (중복 제거)
+        let index = GLOBAL_SEARCH_INDEX[word]
+        // TODO: post_id가 이미 있으면 추가 안함
+        index.frequency = index.frequency + 1
+      else
+        let index = SearchIndex {
+          word: word,
+          post_ids: [post_id],
+          frequency: 1
+        }
+        GLOBAL_SEARCH_INDEX[word] = index
+      end
+    end
+  end
+
+fn split_into_words(text: string) -> array<string>
+  intent "텍스트를 단어로 분할 (공백 기준)"
+  do
+    let words: array<string> = []
+    let current_word = ""
+
+    for i = 0; i < length(text); i++
+      let ch = substring(text, i, i + 1)
+
+      if ch == " " || ch == "," || ch == "." || ch == ";" || ch == ":"
+        if length(current_word) > 0
+          words = array_append(words, current_word)
+          current_word = ""
+        end
+      else
+        current_word = current_word + ch
+      end
+    end
+
+    if length(current_word) > 0
+      words = array_append(words, current_word)
+    end
+
+    return words
+  end
+
+fn update_search_stats(keyword: string, result_count: i32, exec_time: i32) -> void
+  intent "검색 통계 업데이트"
+  do
+    GLOBAL_SEARCH_STATS.total_searches = GLOBAL_SEARCH_STATS.total_searches + 1
+    GLOBAL_SEARCH_STATS.total_results = GLOBAL_SEARCH_STATS.total_results + result_count
+
+    // 평균 실행 시간 계산
+    let prev_avg = GLOBAL_SEARCH_STATS.avg_execution_time_ms
+    let new_avg = (prev_avg * ((GLOBAL_SEARCH_STATS.total_searches - 1) as f64) + (exec_time as f64)) / (GLOBAL_SEARCH_STATS.total_searches as f64)
+    GLOBAL_SEARCH_STATS.avg_execution_time_ms = new_avg
+  end
+
+pub fn get_popular_keywords(limit: i32) -> array<string>
+  intent "가장 인기있는 검색 키워드 반환"
+  do
+    let keywords: array<string> = []
+    // TODO: GLOBAL_SEARCH_STATS.popular_keywords에서 상위 limit개 반환
+    return keywords
+  end
+
+pub fn print_search_stats() -> void
+  intent "검색 통계 출력"
+  do
+    println("")
+    println("🔍 === 검색 통계 ===")
+    println("   총 검색: " + int_to_string(GLOBAL_SEARCH_STATS.total_searches))
+    println("   총 결과: " + int_to_string(GLOBAL_SEARCH_STATS.total_results))
+    println("   평균 시간: " + format_float(GLOBAL_SEARCH_STATS.avg_execution_time_ms) + " ms")
+    println("   인덱스 크기: " + int_to_string(length(GLOBAL_SEARCH_INDEX)) + " 단어")
+    println("")
+  end
+
+// ============================================================================
+// PART 8: 내부 헬퍼 함수
+// ============================================================================
+
+fn contains(text: string, pattern: string) -> bool
+  intent "텍스트에 패턴이 포함되어 있는지 확인"
+  do
+    let text_len = length(text)
+    let pattern_len = length(pattern)
+
+    for i = 0; i < text_len - pattern_len + 1; i++
+      if substring(text, i, i + pattern_len) == pattern
+        return true
+      end
+    end
+
+    return false
+  end
+
+fn to_lowercase(s: string) -> string
+  intent "문자열을 소문자로 변환"
+  do
+    return string_lowercase(s)
+  end
+
+fn substring(s: string, start: i32, end: i32) -> string
+  intent "부분 문자열 추출"
+  do
+    return string_slice(s, start, end)
+  end
+
+fn compare_dates(date1: string, date2: string) -> i32
+  intent "두 날짜 비교 (-1: date1 < date2)"
+  do
+    if date1 < date2
+      return -1
+    else if date1 > date2
+      return 1
+    else
+      return 0
+    end
+  end
+
+fn string_to_int(s: string) -> i32
+  intent "문자열을 정수로 변환"
+  do
+    match parse_int(s)
+      Ok(n) => return n
+      Err(_) => return 0
+    end
+  end
+
+fn get_current_time_ms() -> i32
+  intent "현재 시간 (밀리초)"
+  do
+    return 0  // TODO: 실제 시간 함수
+  end
+
+fn int_to_string(n: i32) -> string
+  intent "정수를 문자열로 변환"
+  do
+    return to_string(n)
+  end
+
+fn format_float(f: f64) -> string
+  intent "실수를 문자열로 변환"
+  do
+    return to_string((f as i32)) + ".0"  // TODO: 실제 포맷팅
+  end
+
+fn array_append(arr: array<Post>, item: Post) -> array<Post>
+  intent "배열에 항목 추가"
+  do
+    return arr  // TODO: 실제 append 구현
+  end

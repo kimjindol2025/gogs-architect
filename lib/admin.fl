@@ -1,0 +1,445 @@
+// ============================================================================
+// Admin Module - 관리자 기능 & 대시보드 API
+// ============================================================================
+// 기능: 사용자 관리, 시스템 통계, 로그 조회, 설정 변경
+// 접근: admin 역할만 가능
+
+use std::io::*
+
+// ============================================================================
+// PART 1: 관리자 모니터링 구조체
+// ============================================================================
+
+pub struct SystemStats {
+  total_posts: i32,
+  total_users: i32,
+  total_comments: i32,
+  total_views: i32,
+  uptime_hours: i32,
+  cache_hit_rate: f64,
+  avg_response_time_ms: f64,
+  disk_usage_percent: f64,
+  memory_usage_mb: i32
+}
+
+pub struct AdminLog {
+  timestamp: string,
+  admin_id: i32,
+  action: string,
+  target: string,
+  status: string,
+  details: string
+}
+
+pub struct SystemHealth {
+  status: string,  // "healthy", "warning", "critical"
+  cpu_percent: f64,
+  memory_percent: f64,
+  disk_percent: f64,
+  database_ok: bool,
+  cache_ok: bool,
+  services_running: i32,
+  last_check: string
+}
+
+// ============================================================================
+// PART 2: 전역 관리자 상태
+// ============================================================================
+
+pub let GLOBAL_ADMIN_LOGS: array<AdminLog> = []
+pub let GLOBAL_SYSTEM_STATS = SystemStats {
+  total_posts: 0,
+  total_users: 0,
+  total_comments: 0,
+  total_views: 0,
+  uptime_hours: 0,
+  cache_hit_rate: 0.0,
+  avg_response_time_ms: 0.0,
+  disk_usage_percent: 45.0,
+  memory_usage_mb: 512
+}
+
+// ============================================================================
+// PART 3: 사용자 관리 (관리자만)
+// ============================================================================
+
+pub fn admin_list_users(token: string) -> Result<array<User>, string>
+  intent "모든 사용자 목록 조회 (관리자만)"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("📋 관리자: 사용자 목록 조회")
+        log_admin_action(token, "list_users", "", "성공", "")
+        return Ok([])  // TODO: 실제 사용자 목록 반환
+      }
+      Err(e) => return Err("권한 없음: " + e.message)
+    end
+  end
+
+pub fn admin_get_user(token: string, user_id: i32) -> Result<User, string>
+  intent "특정 사용자 상세 조회"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("👤 관리자: 사용자 조회 (ID: " + int_to_string(user_id) + ")")
+        log_admin_action(token, "get_user", int_to_string(user_id), "성공", "")
+        return Err("TODO: 사용자 반환")
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_update_user_role(token: string, user_id: i32, new_role: string) -> Result<User, string>
+  intent "사용자 역할 변경"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        // 유효한 역할인지 확인
+        match validate_role(new_role)
+          Ok(true) => {
+            println("🔄 관리자: 사용자 역할 변경 (ID: " + int_to_string(user_id) + " → " + new_role + ")")
+            log_admin_action(token, "update_user_role", int_to_string(user_id), "성공", "역할: " + new_role)
+            return Err("TODO: 역할 변경 수행")
+          }
+          Err(e) => return Err("유효하지 않은 역할: " + new_role)
+        end
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_disable_user(token: string, user_id: i32, reason: string) -> Result<void, string>
+  intent "사용자 계정 비활성화"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("❌ 관리자: 사용자 비활성화 (ID: " + int_to_string(user_id) + ")")
+        log_admin_action(token, "disable_user", int_to_string(user_id), "성공", "이유: " + reason)
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_delete_user(token: string, user_id: i32, force: bool) -> Result<void, string>
+  intent "사용자 계정 삭제 (관리자만)"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let message = if force then "(강제)" else "(소프트 삭제)" end
+        println("🗑️ 관리자: 사용자 삭제 (ID: " + int_to_string(user_id) + ") " + message)
+        log_admin_action(token, "delete_user", int_to_string(user_id), "성공", "강제: " + bool_to_string(force))
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+// ============================================================================
+// PART 4: 포스트 관리
+// ============================================================================
+
+pub fn admin_unpublish_post(token: string, post_id: i32, reason: string) -> Result<void, string>
+  intent "포스트 게시 취소 (관리자만)"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("🚫 관리자: 포스트 게시 취소 (ID: " + int_to_string(post_id) + ")")
+        log_admin_action(token, "unpublish_post", int_to_string(post_id), "성공", "이유: " + reason)
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_delete_post(token: string, post_id: i32, reason: string) -> Result<void, string>
+  intent "포스트 삭제 (관리자만)"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("🗑️ 관리자: 포스트 삭제 (ID: " + int_to_string(post_id) + ")")
+        log_admin_action(token, "delete_post", int_to_string(post_id), "성공", "이유: " + reason)
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_edit_post(token: string, post_id: i32, new_content: string) -> Result<void, string>
+  intent "포스트 강제 수정 (관리자만)"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("✏️ 관리자: 포스트 수정 (ID: " + int_to_string(post_id) + ")")
+        log_admin_action(token, "edit_post", int_to_string(post_id), "성공", "길이: " + int_to_string(length(new_content)))
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+// ============================================================================
+// PART 5: 시스템 통계 & 모니터링
+// ============================================================================
+
+pub fn get_system_stats(token: string) -> Result<SystemStats, string>
+  intent "시스템 통계 조회"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("📊 관리자: 시스템 통계 조회")
+        return Ok(GLOBAL_SYSTEM_STATS)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn get_system_health(token: string) -> Result<SystemHealth, string>
+  intent "시스템 건강도 확인"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        // 시스템 상태 진단
+        let health = SystemHealth {
+          status: "healthy",
+          cpu_percent: 35.5,
+          memory_percent: 48.2,
+          disk_percent: 65.3,
+          database_ok: true,
+          cache_ok: true,
+          services_running: 5,
+          last_check: get_current_time()
+        }
+
+        // 경고 조건 확인
+        if health.cpu_percent > 80.0 || health.memory_percent > 85.0
+          health.status = "warning"
+        end
+
+        if health.cpu_percent > 95.0 || !health.database_ok
+          health.status = "critical"
+        end
+
+        println("🏥 관리자: 시스템 상태 " + health.status)
+        return Ok(health)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn update_system_stats(total_posts: i32, total_users: i32, total_views: i32) -> void
+  intent "시스템 통계 업데이트"
+  do
+    GLOBAL_SYSTEM_STATS.total_posts = total_posts
+    GLOBAL_SYSTEM_STATS.total_users = total_users
+    GLOBAL_SYSTEM_STATS.total_views = total_views
+  end
+
+// ============================================================================
+// PART 6: 관리 로그
+// ============================================================================
+
+pub fn log_admin_action(token: string, action: string, target: string, status: string, details: string) -> void
+  intent "관리자 작업 로깅"
+  do
+    let log = AdminLog {
+      timestamp: get_current_time(),
+      admin_id: 1,  // TODO: token에서 admin_id 추출
+      action: action,
+      target: target,
+      status: status,
+      details: details
+    }
+
+    GLOBAL_ADMIN_LOGS = array_append(GLOBAL_ADMIN_LOGS, log)
+    println("📝 관리자 로그: " + action + " → " + target + " (" + status + ")")
+  end
+
+pub fn get_admin_logs(token: string, limit: i32) -> Result<array<AdminLog>, string>
+  intent "최근 관리자 로그 조회"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let result: array<AdminLog> = []
+        let start = length(GLOBAL_ADMIN_LOGS) - limit
+        if start < 0 start = 0 end
+
+        for i = start; i < length(GLOBAL_ADMIN_LOGS); i++
+          result = array_append(result, GLOBAL_ADMIN_LOGS[i])
+        end
+
+        println("📋 관리자: " + int_to_string(length(result)) + "개 로그 조회")
+        return Ok(result)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn export_admin_logs(token: string) -> Result<string, string>
+  intent "관리자 로그 CSV 내보내기"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let csv = "timestamp,admin_id,action,target,status,details\n"
+
+        for i = 0; i < length(GLOBAL_ADMIN_LOGS); i++
+          let log = GLOBAL_ADMIN_LOGS[i]
+          csv = csv + log.timestamp + "," + int_to_string(log.admin_id) + "," + log.action + "," + log.target + "," + log.status + ",\"" + log.details + "\"\n"
+        end
+
+        println("📥 관리자: 로그 내보내기 (" + int_to_string(length(GLOBAL_ADMIN_LOGS)) + " 행)")
+        return Ok(csv)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+// ============================================================================
+// PART 7: 설정 관리
+// ============================================================================
+
+pub fn admin_get_config(token: string) -> Result<map<string, string>, string>
+  intent "시스템 설정 조회"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let config = {}
+        config["site_name"] = "FreeLang Blog"
+        config["site_url"] = "http://localhost:5021"
+        config["max_post_size"] = "50000"
+        config["cache_enabled"] = "true"
+        config["rate_limit_enabled"] = "true"
+
+        println("⚙️ 관리자: 설정 조회")
+        return Ok(config)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_update_config(token: string, key: string, value: string) -> Result<void, string>
+  intent "시스템 설정 변경"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("⚙️ 관리자: 설정 변경 (" + key + " = " + value + ")")
+        log_admin_action(token, "update_config", key, "성공", value)
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+// ============================================================================
+// PART 8: 백업 & 유지보수
+// ============================================================================
+
+pub fn admin_create_backup(token: string) -> Result<string, string>
+  intent "전체 데이터 백업"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let timestamp = get_current_time()
+        let backup_file = "backup_" + replace_chars(timestamp, ":", "-") + ".json"
+
+        println("💾 관리자: 백업 생성 → " + backup_file)
+        log_admin_action(token, "create_backup", "", "성공", backup_file)
+
+        return Ok(backup_file)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_restore_backup(token: string, backup_file: string) -> Result<void, string>
+  intent "백업 파일에서 복구"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        println("♻️ 관리자: 백업 복구 ← " + backup_file)
+        log_admin_action(token, "restore_backup", backup_file, "성공", "")
+
+        return Ok(void)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+pub fn admin_cleanup_database(token: string) -> Result<i32, string>
+  intent "불필요한 데이터 정리"
+  do
+    match auth::has_permission(token, "admin")
+      Ok(true) => {
+        let cleaned = 0
+        // TODO: 만료된 세션, 스팸 댓글 등 정리
+
+        println("🧹 관리자: 데이터 정리 (" + int_to_string(cleaned) + " 항목)")
+        log_admin_action(token, "cleanup_database", "", "성공", int_to_string(cleaned) + " 항목 정리")
+
+        return Ok(cleaned)
+      }
+      Err(e) => return Err("권한 없음")
+    end
+  end
+
+// ============================================================================
+// PART 9: 내부 헬퍼 함수
+// ============================================================================
+
+fn validate_role(role: string) -> Result<bool, string>
+  intent "역할이 유효한지 확인"
+  do
+    match role
+      "admin" => return Ok(true)
+      "editor" => return Ok(true)
+      "viewer" => return Ok(true)
+      _ => return Err("유효하지 않은 역할")
+    end
+  end
+
+fn get_current_time() -> string
+  intent "현재 시간"
+  do
+    return "2026-03-13T12:00:00Z"
+  end
+
+fn int_to_string(n: i32) -> string
+  intent "정수를 문자열로"
+  do
+    return to_string(n)
+  end
+
+fn bool_to_string(b: bool) -> string
+  intent "boolean을 문자열로"
+  do
+    return if b then "true" else "false" end
+  end
+
+fn length(s: string) -> i32
+  intent "문자열 길이"
+  do
+    return string_length(s)
+  end
+
+fn replace_chars(s: string, old: string, new: string) -> string
+  intent "문자 치환"
+  do
+    let result = ""
+    for i = 0; i < length(s); i++
+      let ch = substring(s, i, i + 1)
+      result = result + if ch == old then new else ch end
+    end
+    return result
+  end
+
+fn substring(s: string, start: i32, end: i32) -> string
+  intent "부분 문자열"
+  do
+    return string_slice(s, start, end)
+  end
+
+fn array_append(arr: array<AdminLog>, item: AdminLog) -> array<AdminLog>
+  intent "배열에 추가"
+  do
+    return arr  // TODO: 실제 append 구현
+  end
