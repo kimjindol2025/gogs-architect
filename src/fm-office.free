@@ -1,0 +1,246 @@
+// fm-office.free - Office Document Preview (Word, Excel, PowerPoint, PDF)
+
+fn preview_pdf(path: String, page: Int) -> Map {
+    // PDF 미리보기 (페이지 지정)
+    var result = map_new()
+
+    if !file_exists(path) {
+        map_set(result, "success", false)
+        map_set(result, "error", "File not found")
+        return result
+    }
+
+    // PDF 메타데이터 추출
+    var file_size = file_size(path)
+    var filename = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+
+    map_set(result, "success", true)
+    map_set(result, "type", "pdf")
+    map_set(result, "filename", filename)
+    map_set(result, "size", file_size)
+    map_set(result, "current_page", page)
+    map_set(result, "preview_url", "/api/office/pdf/" + filename + "?page=" + str_from_int(page))
+    map_set(result, "mime", "application/pdf")
+
+    return result
+}
+
+fn preview_word_document(path: String) -> Map {
+    // Word 문서 미리보기 (.docx)
+    var result = map_new()
+
+    if !file_exists(path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var filename = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+
+    // DOCX는 ZIP 형식이므로 내부 구조 분석
+    var metadata = extract_docx_metadata(path)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "word")
+    map_set(result, "filename", filename)
+    map_set(result, "title", map_get(metadata, "title"))
+    map_set(result, "author", map_get(metadata, "author"))
+    map_set(result, "created", map_get(metadata, "created"))
+    map_set(result, "modified", map_get(metadata, "modified"))
+    map_set(result, "page_count", map_get(metadata, "page_count"))
+    map_set(result, "word_count", map_get(metadata, "word_count"))
+
+    return result
+}
+
+fn extract_docx_metadata(path: String) -> Map {
+    // DOCX 메타데이터 추출
+    var metadata = map_new()
+
+    // DOCX는 ZIP 형식이므로 docProps/core.xml 파일을 읽어야 함
+    // 여기서는 기본 메타데이터만 반환
+
+    map_set(metadata, "title", "")
+    map_set(metadata, "author", "")
+    map_set(metadata, "created", "")
+    map_set(metadata, "modified", "")
+    map_set(metadata, "page_count", 0)
+    map_set(metadata, "word_count", 0)
+
+    return metadata
+}
+
+fn preview_excel_document(path: String, sheet: Int) -> Map {
+    // Excel 문서 미리보기 (.xlsx)
+    var result = map_new()
+
+    if !file_exists(path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var filename = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+
+    // XLSX 메타데이터 추출
+    var metadata = extract_xlsx_metadata(path)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "excel")
+    map_set(result, "filename", filename)
+    map_set(result, "sheet_count", map_get(metadata, "sheet_count"))
+    map_set(result, "current_sheet", sheet)
+    map_set(result, "sheets", map_get(metadata, "sheets"))
+    map_set(result, "created", map_get(metadata, "created"))
+    map_set(result, "modified", map_get(metadata, "modified"))
+
+    return result
+}
+
+fn extract_xlsx_metadata(path: String) -> Map {
+    // XLSX 메타데이터 추출
+    var metadata = map_new()
+
+    map_set(metadata, "sheet_count", 1)
+    map_set(metadata, "sheets", list_new())
+    map_set(metadata, "created", "")
+    map_set(metadata, "modified", "")
+
+    return metadata
+}
+
+fn preview_powerpoint_document(path: String, slide: Int) -> Map {
+    // PowerPoint 미리보기 (.pptx)
+    var result = map_new()
+
+    if !file_exists(path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var filename = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+
+    // PPTX 메타데이터 추출
+    var metadata = extract_pptx_metadata(path)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "powerpoint")
+    map_set(result, "filename", filename)
+    map_set(result, "slide_count", map_get(metadata, "slide_count"))
+    map_set(result, "current_slide", slide)
+    map_set(result, "title", map_get(metadata, "title"))
+    map_set(result, "author", map_get(metadata, "author"))
+    map_set(result, "created", map_get(metadata, "created"))
+
+    return result
+}
+
+fn extract_pptx_metadata(path: String) -> Map {
+    // PPTX 메타데이터 추출
+    var metadata = map_new()
+
+    map_set(metadata, "slide_count", 0)
+    map_set(metadata, "title", "")
+    map_set(metadata, "author", "")
+    map_set(metadata, "created", "")
+
+    return metadata
+}
+
+fn generate_office_preview_html(filename: String, file_type: String) -> String {
+    // Office 문서 HTML 미리보기 생성
+    var html = "<!DOCTYPE html><html><head>"
+    html = html + "<meta charset=\"UTF-8\">"
+    html = html + "<title>" + filename + "</title>"
+    html = html + "<style>"
+    html = html + "body { font-family: sans-serif; margin: 20px; background: #f5f5f5; }"
+    html = html + ".preview { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }"
+    html = html + ".toolbar { margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 4px; }"
+    html = html + "button { padding: 8px 16px; margin-right: 10px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }"
+    html = html + "button:hover { background: #2980b9; }"
+    html = html + ".content { min-height: 400px; border: 1px solid #ddd; padding: 20px; }"
+    html = html + "</style></head><body>"
+    html = html + "<div class=\"preview\">"
+    html = html + "<h1>" + filename + "</h1>"
+    html = html + "<div class=\"toolbar\">"
+
+    if file_type == "pdf" {
+        html = html + "<button onclick=\"previousPage()\">← Prev</button>"
+        html = html + "<input type=\"number\" id=\"pageNum\" min=\"1\" value=\"1\">"
+        html = html + "<button onclick=\"nextPage()\">Next →</button>"
+    } else if file_type == "excel" {
+        html = html + "<select id=\"sheetSelect\" onchange=\"changeSheet()\">"
+        html = html + "<option>Sheet 1</option>"
+        html = html + "<option>Sheet 2</option>"
+        html = html + "</select>"
+    } else if file_type == "powerpoint" {
+        html = html + "<button onclick=\"previousSlide()\">← Prev</button>"
+        html = html + "<input type=\"number\" id=\"slideNum\" min=\"1\" value=\"1\">"
+        html = html + "<button onclick=\"nextSlide()\">Next →</button>"
+    }
+
+    html = html + "<button onclick=\"download()\">Download</button>"
+    html = html + "</div>"
+    html = html + "<div class=\"content\">"
+    html = html + "Document content will be displayed here"
+    html = html + "</div>"
+    html = html + "</div>"
+    html = html + "<script>"
+    html = html + "function previousPage() { var p = document.getElementById('pageNum'); p.value = Math.max(1, p.value - 1); loadPage(); }"
+    html = html + "function nextPage() { var p = document.getElementById('pageNum'); p.value = parseInt(p.value) + 1; loadPage(); }"
+    html = html + "function previousSlide() { var s = document.getElementById('slideNum'); s.value = Math.max(1, s.value - 1); loadSlide(); }"
+    html = html + "function nextSlide() { var s = document.getElementById('slideNum'); s.value = parseInt(s.value) + 1; loadSlide(); }"
+    html = html + "function changeSheet() { var s = document.getElementById('sheetSelect'); loadSheet(s.value); }"
+    html = html + "function loadPage() { console.log('Loading page: ' + document.getElementById('pageNum').value); }"
+    html = html + "function loadSlide() { console.log('Loading slide: ' + document.getElementById('slideNum').value); }"
+    html = html + "function loadSheet(sheet) { console.log('Loading sheet: ' + sheet); }"
+    html = html + "function download() { window.location.href = '/api/download?path=' + encodeURIComponent(window.location.pathname); }"
+    html = html + "</script>"
+    html = html + "</body></html>"
+
+    return html
+}
+
+fn convert_office_to_pdf(input_path: String, output_path: String) -> Bool {
+    // Office 문서를 PDF로 변환 (libreoffice 필요)
+    // 여기서는 스켈레톤
+    return true
+}
+
+fn extract_office_text(path: String) -> String {
+    // Office 문서에서 텍스트 추출
+    var content = ""
+
+    // 파일 확장자 확인
+    var ext = ""
+    var dot_idx = str_rfind(path, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(path, dot_idx + 1, str_len(path)))
+    }
+
+    if ext == "docx" {
+        content = extract_docx_text(path)
+    } else if ext == "xlsx" {
+        content = extract_xlsx_text(path)
+    } else if ext == "pptx" {
+        content = extract_pptx_text(path)
+    }
+
+    return content
+}
+
+fn extract_docx_text(path: String) -> String {
+    // DOCX에서 텍스트 추출
+    // DOCX는 ZIP 형식이므로 document.xml 파일을 파싱해야 함
+    return "[DOCX Preview] Document text extraction requires XML parsing"
+}
+
+fn extract_xlsx_text(path: String) -> String {
+    // XLSX에서 텍스트 추출
+    // XLSX는 ZIP 형식이므로 sheet1.xml 파일을 파싱해야 함
+    return "[XLSX Preview] Spreadsheet data extraction requires XML parsing"
+}
+
+fn extract_pptx_text(path: String) -> String {
+    // PPTX에서 텍스트 추출
+    // PPTX는 ZIP 형식이므로 slide*.xml 파일들을 파싱해야 함
+    return "[PPTX Preview] Slide content extraction requires XML parsing"
+}

@@ -1,0 +1,364 @@
+// fm-utils.free - JSON Parser & Utility Functions
+
+fn parse_json_simple(json_str: String) -> Map {
+    // 간단한 JSON 파서 (객체만 지원)
+    var result = map_new()
+
+    // { 와 } 제거
+    var trimmed = str_trim(json_str)
+    if str_startswith(trimmed, "{") && str_endswith(trimmed, "}") {
+        trimmed = str_substring(trimmed, 1, str_len(trimmed) - 1)
+    }
+
+    // 키-값 쌍 분리
+    var pairs = parse_json_pairs(trimmed)
+    var i = 0
+    while i < list_len(pairs) {
+        var pair = list_get(pairs, i)
+        var key_value = str_split(pair, ":")
+        if list_len(key_value) >= 2 {
+            var key = str_trim(list_get(key_value, 0))
+            var value = str_trim(str_substring(pair, str_find(pair, ":") + 1, str_len(pair)))
+
+            // 따옴표 제거
+            key = str_replace(key, "\"", "")
+            key = str_replace(key, "'", "")
+
+            // 값 타입 파싱
+            if str_startswith(value, "\"") && str_endswith(value, "\"") {
+                value = str_substring(value, 1, str_len(value) - 1)
+            } else if str_startswith(value, "'") && str_endswith(value, "'") {
+                value = str_substring(value, 1, str_len(value) - 1)
+            } else if value == "true" {
+                value = "true"
+            } else if value == "false" {
+                value = "false"
+            } else if value == "null" {
+                value = null
+            }
+
+            map_set(result, key, value)
+        }
+        i = i + 1
+    }
+
+    return result
+}
+
+fn parse_json_pairs(json_content: String) -> List {
+    // JSON 키-값 쌍 분리
+    var pairs = list_new()
+    var current = ""
+    var in_string = false
+    var escape = false
+    var brace_count = 0
+
+    var i = 0
+    while i < str_len(json_content) {
+        var char = str_substring(json_content, i, i + 1)
+
+        if escape {
+            current = current + char
+            escape = false
+        } else if char == "\\" {
+            escape = true
+            current = current + char
+        } else if char == "\"" {
+            in_string = !in_string
+            current = current + char
+        } else if !in_string && char == "{" {
+            brace_count = brace_count + 1
+            current = current + char
+        } else if !in_string && char == "}" {
+            brace_count = brace_count - 1
+            current = current + char
+        } else if !in_string && char == "," && brace_count == 0 {
+            if str_len(current) > 0 {
+                list_push(pairs, str_trim(current))
+            }
+            current = ""
+        } else {
+            current = current + char
+        }
+
+        i = i + 1
+    }
+
+    if str_len(current) > 0 {
+        list_push(pairs, str_trim(current))
+    }
+
+    return pairs
+}
+
+fn json_encode(obj: Map) -> String {
+    // Map을 JSON 문자열로 변환
+    var result = "{"
+    var first = true
+
+    // 실제로는 Map의 모든 키를 순회해야 하지만, 여기서는 간단한 구현
+    result = result + "}"
+
+    return result
+}
+
+fn get_file_mime_type(filename: String) -> String {
+    // 파일 MIME 타입 판단
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(filename, dot_idx + 1, str_len(filename)))
+    }
+
+    if ext == "html" || ext == "htm" {
+        return "text/html"
+    } else if ext == "css" {
+        return "text/css"
+    } else if ext == "js" {
+        return "application/javascript"
+    } else if ext == "json" {
+        return "application/json"
+    } else if ext == "xml" {
+        return "application/xml"
+    } else if ext == "pdf" {
+        return "application/pdf"
+    } else if ext == "zip" {
+        return "application/zip"
+    } else if ext == "tar" {
+        return "application/x-tar"
+    } else if ext == "gz" {
+        return "application/gzip"
+    } else if ext == "jpg" || ext == "jpeg" {
+        return "image/jpeg"
+    } else if ext == "png" {
+        return "image/png"
+    } else if ext == "gif" {
+        return "image/gif"
+    } else if ext == "svg" {
+        return "image/svg+xml"
+    } else if ext == "webp" {
+        return "image/webp"
+    } else if ext == "mp3" {
+        return "audio/mpeg"
+    } else if ext == "wav" {
+        return "audio/wav"
+    } else if ext == "flac" {
+        return "audio/flac"
+    } else if ext == "ogg" {
+        return "audio/ogg"
+    } else if ext == "mp4" {
+        return "video/mp4"
+    } else if ext == "webm" {
+        return "video/webm"
+    } else if ext == "mkv" {
+        return "video/x-matroska"
+    } else if ext == "avi" {
+        return "video/x-msvideo"
+    } else if ext == "doc" || ext == "docx" {
+        return "application/msword"
+    } else if ext == "xls" || ext == "xlsx" {
+        return "application/vnd.ms-excel"
+    } else if ext == "ppt" || ext == "pptx" {
+        return "application/vnd.ms-powerpoint"
+    } else if ext == "txt" || ext == "text" {
+        return "text/plain"
+    } else if ext == "md" || ext == "markdown" {
+        return "text/markdown"
+    } else if ext == "csv" {
+        return "text/csv"
+    }
+
+    return "application/octet-stream"
+}
+
+fn is_text_file(filename: String) -> Bool {
+    // 텍스트 파일 판단
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(filename, dot_idx + 1, str_len(filename)))
+    }
+
+    var text_exts = list_new()
+    list_push(text_exts, "txt")
+    list_push(text_exts, "md")
+    list_push(text_exts, "json")
+    list_push(text_exts, "xml")
+    list_push(text_exts, "csv")
+    list_push(text_exts, "html")
+    list_push(text_exts, "htm")
+    list_push(text_exts, "css")
+    list_push(text_exts, "js")
+    list_push(text_exts, "py")
+    list_push(text_exts, "free")
+    list_push(text_exts, "fl")
+    list_push(text_exts, "sh")
+    list_push(text_exts, "bash")
+    list_push(text_exts, "log")
+
+    var i = 0
+    while i < list_len(text_exts) {
+        if ext == list_get(text_exts, i) {
+            return true
+        }
+        i = i + 1
+    }
+
+    return false
+}
+
+fn is_media_file(filename: String) -> Bool {
+    // 미디어 파일 판단 (이미지/비디오/오디오)
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(filename, dot_idx + 1, str_len(filename)))
+    }
+
+    var media_exts = list_new()
+    list_push(media_exts, "jpg")
+    list_push(media_exts, "jpeg")
+    list_push(media_exts, "png")
+    list_push(media_exts, "gif")
+    list_push(media_exts, "webp")
+    list_push(media_exts, "svg")
+    list_push(media_exts, "mp3")
+    list_push(media_exts, "wav")
+    list_push(media_exts, "flac")
+    list_push(media_exts, "ogg")
+    list_push(media_exts, "mp4")
+    list_push(media_exts, "webm")
+    list_push(media_exts, "mkv")
+    list_push(media_exts, "avi")
+
+    var i = 0
+    while i < list_len(media_exts) {
+        if ext == list_get(media_exts, i) {
+            return true
+        }
+        i = i + 1
+    }
+
+    return false
+}
+
+fn is_office_file(filename: String) -> Bool {
+    // Office 문서 파일 판단
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(filename, dot_idx + 1, str_len(filename)))
+    }
+
+    var office_exts = list_new()
+    list_push(office_exts, "doc")
+    list_push(office_exts, "docx")
+    list_push(office_exts, "xls")
+    list_push(office_exts, "xlsx")
+    list_push(office_exts, "ppt")
+    list_push(office_exts, "pptx")
+    list_push(office_exts, "pdf")
+
+    var i = 0
+    while i < list_len(office_exts) {
+        if ext == list_get(office_exts, i) {
+            return true
+        }
+        i = i + 1
+    }
+
+    return false
+}
+
+fn format_file_size(size_bytes: Int) -> String {
+    // 파일 크기를 읽기 좋은 형식으로 변환
+    if size_bytes < 1024 {
+        return str_from_int(size_bytes) + " B"
+    }
+    var kb = size_bytes / 1024
+    if kb < 1024 {
+        return str_from_int(kb) + " KB"
+    }
+    var mb = kb / 1024
+    if mb < 1024 {
+        return str_from_int(mb) + " MB"
+    }
+    var gb = mb / 1024
+    return str_from_int(gb) + " GB"
+}
+
+fn format_timestamp(timestamp: Int) -> String {
+    // Unix 타임스탬프를 읽기 좋은 형식으로 변환
+    // 실제로는 더 복잡한 날짜 파싱 필요
+    return str_from_int(timestamp)
+}
+
+fn str_trim(s: String) -> String {
+    // 양쪽 공백 제거
+    var start = 0
+    var end = str_len(s)
+
+    while start < end && (str_substring(s, start, start + 1) == " " || str_substring(s, start, start + 1) == "\t") {
+        start = start + 1
+    }
+
+    while end > start && (str_substring(s, end - 1, end) == " " || str_substring(s, end - 1, end) == "\t") {
+        end = end - 1
+    }
+
+    if start >= end {
+        return ""
+    }
+
+    return str_substring(s, start, end)
+}
+
+fn str_to_lower(s: String) -> String {
+    // 소문자로 변환
+    var result = ""
+    var i = 0
+    while i < str_len(s) {
+        var char = str_substring(s, i, i + 1)
+        if char >= "A" && char <= "Z" {
+            var ord = ascii_value(char)
+            char = ascii_char(ord + 32)
+        }
+        result = result + char
+        i = i + 1
+    }
+    return result
+}
+
+fn ascii_value(char: String) -> Int {
+    // 문자의 ASCII 값 반환 (간단한 구현)
+    if char == "A" { return 65 }
+    if char == "B" { return 66 }
+    if char == "Z" { return 90 }
+    return 0
+}
+
+fn ascii_char(code: Int) -> String {
+    // ASCII 코드를 문자로 변환 (간단한 구현)
+    return str_substring("ABCDEFGHIJKLMNOPQRSTUVWXYZ", code - 65, code - 64)
+}
+
+fn str_endswith(s: String, suffix: String) -> Bool {
+    var s_len = str_len(s)
+    var suffix_len = str_len(suffix)
+    if suffix_len > s_len {
+        return false
+    }
+    return str_substring(s, s_len - suffix_len, s_len) == suffix
+}
+
+fn list_find(lst: List, item: String) -> Int {
+    // 리스트에서 항목 위치 찾기
+    var i = 0
+    while i < list_len(lst) {
+        if list_get(lst, i) == item {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}

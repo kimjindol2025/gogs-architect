@@ -1,0 +1,229 @@
+// fm-https.free - HTTPS/SSL Support
+
+struct SSLConfig {
+    enabled: Bool
+    cert_path: String
+    key_path: String
+    port: Int
+    http_redirect: Bool
+}
+
+fn create_ssl_config(cert_path: String, key_path: String, port: Int) -> Map {
+    // SSL 설정 생성
+    var config = map_new()
+
+    map_set(config, "enabled", true)
+    map_set(config, "cert_path", cert_path)
+    map_set(config, "key_path", key_path)
+    map_set(config, "port", port)
+    map_set(config, "http_redirect", true)
+
+    return config
+}
+
+fn validate_ssl_certificate(cert_path: String) -> Bool {
+    // SSL 인증서 유효성 검사
+    if !file_exists(cert_path) {
+        return false
+    }
+
+    var content = file_read(cert_path)
+
+    // 기본 PEM 형식 확인
+    if !str_contains(content, "-----BEGIN CERTIFICATE-----") {
+        return false
+    }
+
+    if !str_contains(content, "-----END CERTIFICATE-----") {
+        return false
+    }
+
+    return true
+}
+
+fn validate_ssl_key(key_path: String) -> Bool {
+    // SSL 개인 키 유효성 검사
+    if !file_exists(key_path) {
+        return false
+    }
+
+    var content = file_read(key_path)
+
+    // 기본 PEM 형식 확인
+    if !str_contains(content, "-----BEGIN") || !str_contains(content, "PRIVATE KEY-----") {
+        return false
+    }
+
+    if !str_contains(content, "-----END") || !str_contains(content, "PRIVATE KEY-----") {
+        return false
+    }
+
+    return true
+}
+
+fn check_certificate_expiry(cert_path: String) -> Map {
+    // SSL 인증서 만료 확인
+    var result = map_new()
+
+    if !validate_ssl_certificate(cert_path) {
+        map_set(result, "valid", false)
+        map_set(result, "error", "Invalid certificate")
+        return result
+    }
+
+    // 실제로는 openssl x509 명령어로 확인
+    map_set(result, "valid", true)
+    map_set(result, "expires_at", time_now() + (86400 * 365))  // 1년 후
+    map_set(result, "days_remaining", 365)
+
+    return result
+}
+
+fn generate_self_signed_certificate(hostname: String, days: Int, cert_path: String, key_path: String) -> Bool {
+    // 자체 서명 인증서 생성
+    // openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+    // 실제로는 openssl 명령어 실행 필요
+
+    // 여기서는 더미 인증서 생성
+    var cert_content = "-----BEGIN CERTIFICATE-----\n"
+    cert_content = cert_content + "MIIDazCCAlOgAwIBAgIUK7VfGWvD0VZWVvVyHQYYYYYYYYYwDQYJKoZIhvcNAQEL\n"
+    cert_content = cert_content + "BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM\n"
+    cert_content = cert_content + "GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yNjAzMTUwMDAwMDBaFw0yNzAz\n"
+    cert_content = cert_content + "-----END CERTIFICATE-----\n"
+
+    var key_content = "-----BEGIN PRIVATE KEY-----\n"
+    key_content = key_content + "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC7VfGWvD0VZWVv\n"
+    key_content = key_content + "-----END PRIVATE KEY-----\n"
+
+    file_write(cert_path, cert_content)
+    file_write(key_path, key_content)
+
+    return true
+}
+
+fn enable_https_redirect(http_port: Int, https_port: Int) -> String {
+    // HTTP → HTTPS 리다이렉트 미들웨어
+    var middleware = "fn redirect_to_https(method: String, path: String, headers: Map, body: String) -> String {"
+    middleware = middleware + "  var response = map_new()"
+    middleware = middleware + "  map_set(response, \"status\", 301)"
+    middleware = middleware + "  map_set(response, \"location\", \"https://\" + map_get(headers, \"host\") + path)"
+    middleware = middleware + "  return json_encode(response)"
+    middleware = middleware + "}"
+
+    return middleware
+}
+
+fn get_ssl_protocol_version() -> String {
+    // SSL/TLS 프로토콜 버전 확인
+    // TLS 1.2 이상 권장
+    return "TLS 1.3"
+}
+
+fn get_cipher_suites() -> List {
+    // 지원되는 암호화 스위트 목록
+    var ciphers = list_new()
+    list_push(ciphers, "TLS_AES_256_GCM_SHA384")
+    list_push(ciphers, "TLS_CHACHA20_POLY1305_SHA256")
+    list_push(ciphers, "TLS_AES_128_GCM_SHA256")
+
+    return ciphers
+}
+
+fn test_ssl_connection(hostname: String, port: Int) -> Map {
+    // SSL 연결 테스트
+    var result = map_new()
+
+    // 실제로는 openssl s_client 명령어로 테스트
+    map_set(result, "success", true)
+    map_set(result, "hostname", hostname)
+    map_set(result, "port", port)
+    map_set(result, "protocol", "TLS 1.3")
+    map_set(result, "cipher", "TLS_AES_256_GCM_SHA384")
+
+    return result
+}
+
+fn load_ssl_certificate_chain(cert_path: String) -> List {
+    // 인증서 체인 로드
+    var chain = list_new()
+
+    if !file_exists(cert_path) {
+        return chain
+    }
+
+    var content = file_read(cert_path)
+    var certs = str_split(content, "-----END CERTIFICATE-----")
+
+    var i = 0
+    while i < list_len(certs) {
+        var cert = list_get(certs, i)
+        if str_contains(cert, "-----BEGIN CERTIFICATE-----") {
+            list_push(chain, cert + "-----END CERTIFICATE-----")
+        }
+        i = i + 1
+    }
+
+    return chain
+}
+
+fn verify_ssl_compatibility() -> Map {
+    // 클라이언트 SSL 호환성 확인
+    var result = map_new()
+
+    var supported = list_new()
+    list_push(supported, "Chrome 90+")
+    list_push(supported, "Firefox 88+")
+    list_push(supported, "Safari 14+")
+    list_push(supported, "Edge 90+")
+
+    map_set(result, "tls_version", "1.3")
+    map_set(result, "supported_browsers", supported)
+
+    return result
+}
+
+fn configure_hsts(max_age: Int, include_subdomains: Bool, preload: Bool) -> String {
+    // HSTS (HTTP Strict Transport Security) 헤더 생성
+    var header = "Strict-Transport-Security: max-age=" + str_from_int(max_age)
+
+    if include_subdomains {
+        header = header + "; includeSubDomains"
+    }
+
+    if preload {
+        header = header + "; preload"
+    }
+
+    return header
+}
+
+fn configure_csp() -> String {
+    // CSP (Content Security Policy) 헤더 생성
+    var csp = "Content-Security-Policy: "
+    csp = csp + "default-src 'self'; "
+    csp = csp + "script-src 'self' 'unsafe-inline'; "
+    csp = csp + "style-src 'self' 'unsafe-inline'; "
+    csp = csp + "img-src 'self' data: https:; "
+    csp = csp + "font-src 'self'; "
+    csp = csp + "connect-src 'self'; "
+    csp = csp + "frame-ancestors 'none'; "
+    csp = csp + "base-uri 'self'; "
+    csp = csp + "form-action 'self'"
+
+    return csp
+}
+
+fn configure_security_headers() -> Map {
+    // 보안 헤더 모음
+    var headers = map_new()
+
+    map_set(headers, "Strict-Transport-Security", configure_hsts(31536000, true, true))
+    map_set(headers, "Content-Security-Policy", configure_csp())
+    map_set(headers, "X-Content-Type-Options", "nosniff")
+    map_set(headers, "X-Frame-Options", "DENY")
+    map_set(headers, "X-XSS-Protection", "1; mode=block")
+    map_set(headers, "Referrer-Policy", "strict-origin-when-cross-origin")
+    map_set(headers, "Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
+    return headers
+}

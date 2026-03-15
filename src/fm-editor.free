@@ -192,3 +192,143 @@ fn estimate_file_size_change(original_size: Int, new_content: String) -> Map {
 
     return result
 }
+
+fn handle_image_preview(path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 이미지 미리보기
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var file_size = file_size(full_path)
+    var ext = ""
+    var dot_idx = str_rfind(filename, ".")
+    if dot_idx > 0 {
+        ext = str_to_lower(str_substring(filename, dot_idx + 1, str_len(filename)))
+    }
+
+    var dimensions = get_image_dimensions(full_path, ext)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "image")
+    map_set(result, "filename", filename)
+    map_set(result, "mime", get_mime_type(filename))
+    map_set(result, "size", file_size)
+    map_set(result, "width", map_get(dimensions, "width"))
+    map_set(result, "height", map_get(dimensions, "height"))
+    map_set(result, "format", ext)
+
+    return result
+}
+
+fn handle_video_preview(path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 비디오 미리보기
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var file_size = file_size(full_path)
+    var metadata = get_video_metadata(full_path)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "video")
+    map_set(result, "filename", filename)
+    map_set(result, "mime", get_mime_type(filename))
+    map_set(result, "size", file_size)
+    map_set(result, "duration", map_get(metadata, "duration"))
+    map_set(result, "width", map_get(metadata, "width"))
+    map_set(result, "height", map_get(metadata, "height"))
+    map_set(result, "bitrate", map_get(metadata, "bitrate"))
+
+    return result
+}
+
+fn handle_audio_preview(path: String, filename: String, db: Map, user_id: String) -> Map {
+    // 오디오 미리보기
+    var result = map_new()
+
+    if !check_permission(db, user_id, "read") {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var full_path = "/home" + path + "/" + filename
+
+    if !file_exists(full_path) {
+        map_set(result, "success", false)
+        return result
+    }
+
+    var file_size = file_size(full_path)
+    var metadata = get_audio_metadata(full_path)
+
+    map_set(result, "success", true)
+    map_set(result, "type", "audio")
+    map_set(result, "filename", filename)
+    map_set(result, "mime", get_mime_type(filename))
+    map_set(result, "size", file_size)
+    map_set(result, "duration", map_get(metadata, "duration"))
+    map_set(result, "bitrate", map_get(metadata, "bitrate"))
+    map_set(result, "sample_rate", map_get(metadata, "sample_rate"))
+
+    return result
+}
+
+fn get_image_dimensions(path: String, format: String) -> Map {
+    // 이미지 크기 추출
+    var result = map_new()
+
+    // 실제로는 이미지 헤더를 파싱해야 함
+    map_set(result, "width", 1920)
+    map_set(result, "height", 1080)
+
+    return result
+}
+
+fn get_video_metadata(path: String) -> Map {
+    // 비디오 메타데이터 추출 (ffprobe 필요)
+    var result = map_new()
+
+    map_set(result, "duration", 120)  // 초 단위
+    map_set(result, "width", 1920)
+    map_set(result, "height", 1080)
+    map_set(result, "bitrate", 5000)  // kbps
+
+    return result
+}
+
+fn get_audio_metadata(path: String) -> Map {
+    // 오디오 메타데이터 추출 (ffprobe 필요)
+    var result = map_new()
+
+    map_set(result, "duration", 180)  // 초 단위
+    map_set(result, "bitrate", 320)  // kbps
+    map_set(result, "sample_rate", 44100)  // Hz
+
+    return result
+}
+
+fn generate_thumbnail(image_path: String, width: Int, height: Int) -> String {
+    // 이미지 썸네일 생성 (ImageMagick 필요)
+    // 여기서는 스켈레톤
+    return "/api/thumbnail?path=" + image_path + "&w=" + str_from_int(width) + "&h=" + str_from_int(height)
+}

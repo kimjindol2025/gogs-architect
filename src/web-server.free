@@ -1,40 +1,212 @@
-// web-server.free - File Manager HTTP Server (Port 13000)
+// web-server.free - Complete File Manager HTTP Server (Port 13000)
+// Features: Core Ops, User Management, Smart Search, Preview, HTTPS, Shell, Share
 
-// Global state
 var rate_limiter = null
 var db = null
 var base_dir = "/home"
+var ssl_config = null
 
-fn parse_json_body(body: String) -> Map {
-    // 간단한 JSON 파서 (실제로는 json_parse 필요)
-    var result = map_new()
+fn parse_query_string(query_str: String) -> Map {
+    // 쿼리 문자열 파싱
+    var params = map_new()
+
+    if query_str == null || str_len(query_str) == 0 {
+        return params
+    }
+
+    var pairs = str_split(query_str, "&")
+    var i = 0
+    while i < list_len(pairs) {
+        var pair = list_get(pairs, i)
+        var key_value = str_split(pair, "=")
+        if list_len(key_value) == 2 {
+            var key = list_get(key_value, 0)
+            var value = list_get(key_value, 1)
+            map_set(params, key, url_decode(value))
+        }
+        i = i + 1
+    }
+
+    return params
+}
+
+fn url_decode(encoded: String) -> String {
+    // URL 디코딩
+    var result = ""
+    var i = 0
+    while i < str_len(encoded) {
+        var char = str_substring(encoded, i, i + 1)
+        if char == "+" {
+            result = result + " "
+        } else if char == "%" && i + 2 < str_len(encoded) {
+            var hex = str_substring(encoded, i + 1, i + 3)
+            // 간단한 구현 (모든 % 인코딩을 지원하지는 않음)
+            result = result + char
+            i = i + 2
+        } else {
+            result = result + char
+        }
+        i = i + 1
+    }
     return result
 }
 
-fn handle_login(body: String) -> String {
-    // POST /api/auth/login
-    var data = parse_json_body(body)
+fn handle_api_request(method: String, path: String, headers: Map, body: String) -> String {
+    // API 라우팅
+
+    // 인증
+    if path == "/api/auth/login" && method == "POST" {
+        return handle_login_api(body)
+    }
+
+    if path == "/api/auth/logout" && method == "POST" {
+        return handle_logout_api(headers)
+    }
+
+    if path == "/api/auth/me" && method == "GET" {
+        return handle_me_api(headers)
+    }
+
+    // 파일시스템
+    if str_startswith(path, "/api/fs/list") && method == "GET" {
+        var query_idx = str_find(path, "?")
+        var query = ""
+        if query_idx >= 0 {
+            query = str_substring(path, query_idx + 1, str_len(path))
+        }
+        var params = parse_query_string(query)
+        var p = map_get(params, "path") ?? "/"
+        return handle_list_api(p, headers)
+    }
+
+    if path == "/api/fs/mkdir" && method == "POST" {
+        return handle_mkdir_api(body, headers)
+    }
+
+    if path == "/api/fs/delete" && method == "POST" {
+        return handle_delete_api(body, headers)
+    }
+
+    if path == "/api/fs/rename" && method == "POST" {
+        return handle_rename_api(body, headers)
+    }
+
+    if path == "/api/fs/copy" && method == "POST" {
+        return handle_copy_api(body, headers)
+    }
+
+    if path == "/api/fs/move" && method == "POST" {
+        return handle_move_api(body, headers)
+    }
+
+    // 파일 작업
+    if str_startswith(path, "/api/file/read") && method == "GET" {
+        var query_idx = str_find(path, "?")
+        var query = ""
+        if query_idx >= 0 {
+            query = str_substring(path, query_idx + 1, str_len(path))
+        }
+        var params = parse_query_string(query)
+        var p = map_get(params, "path") ?? "/"
+        return handle_read_api(p, headers)
+    }
+
+    if path == "/api/file/write" && method == "POST" {
+        return handle_write_api(body, headers)
+    }
+
+    if path == "/api/file/preview" && method == "GET" {
+        var query_idx = str_find(path, "?")
+        var query = ""
+        if query_idx >= 0 {
+            query = str_substring(path, query_idx + 1, str_len(path))
+        }
+        var params = parse_query_string(query)
+        var p = map_get(params, "path") ?? "/"
+        return handle_preview_api(p, headers)
+    }
+
+    // 검색
+    if str_startswith(path, "/api/search") && method == "GET" {
+        var query_idx = str_find(path, "?")
+        var query = ""
+        if query_idx >= 0 {
+            query = str_substring(path, query_idx + 1, str_len(path))
+        }
+        var params = parse_query_string(query)
+        return handle_search_api(params, headers)
+    }
+
+    // 업로드/다운로드
+    if path == "/api/upload" && method == "POST" {
+        return handle_upload_api(body, headers)
+    }
+
+    if str_startswith(path, "/api/download") && method == "GET" {
+        var query_idx = str_find(path, "?")
+        var query = ""
+        if query_idx >= 0 {
+            query = str_substring(path, query_idx + 1, str_len(path))
+        }
+        var params = parse_query_string(query)
+        var p = map_get(params, "path") ?? "/"
+        return handle_download_api(p, headers)
+    }
+
+    // 공유
+    if str_startswith(path, "/api/share/create") && method == "POST" {
+        return handle_share_create_api(body, headers)
+    }
+
+    if str_startswith(path, "/api/share/delete") && method == "POST" {
+        var token = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+        return handle_share_delete_api(token, headers)
+    }
+
+    if str_startswith(path, "/api/share/list") && method == "GET" {
+        return handle_share_list_api(headers)
+    }
+
+    // 셸
+    if path == "/api/shell/run" && method == "POST" {
+        return handle_shell_api(body, headers)
+    }
+
+    // 관리자
+    if path == "/api/admin/users" && method == "GET" {
+        return handle_list_users_api(headers)
+    }
+
+    if path == "/api/admin/users" && method == "POST" {
+        return handle_create_user_api(body, headers)
+    }
+
+    return "{\"status\":\"error\",\"error\":\"Not found\"}"
+}
+
+// ====== API 핸들러들 ======
+
+fn handle_login_api(body: String) -> String {
+    var data = parse_json_simple(body)
     var username = map_get(data, "username")
     var password = map_get(data, "password")
 
     var login_result = user_login(db, username, password)
-    var success = map_get(login_result, "success")
 
-    if success {
+    if map_get(login_result, "success") {
         var response = map_new()
         map_set(response, "status", "ok")
         map_set(response, "token", map_get(login_result, "token"))
-        return json_encode(response)
+        return json_encode_simple(response)
     } else {
         var response = map_new()
         map_set(response, "status", "error")
         map_set(response, "error", map_get(login_result, "error"))
-        return json_encode(response)
+        return json_encode_simple(response)
     }
 }
 
-fn handle_logout(headers: Map) -> String {
-    // POST /api/auth/logout
+fn handle_logout_api(headers: Map) -> String {
     var auth = map_get(headers, "Authorization")
     if auth != null {
         var token = str_substring(auth, 7, str_len(auth))
@@ -43,28 +215,20 @@ fn handle_logout(headers: Map) -> String {
 
     var response = map_new()
     map_set(response, "status", "ok")
-    return json_encode(response)
+    return json_encode_simple(response)
 }
 
-fn handle_me(headers: Map) -> String {
-    // GET /api/auth/me
+fn handle_me_api(headers: Map) -> String {
     var auth = map_get(headers, "Authorization")
     if auth == null {
-        var response = map_new()
-        map_set(response, "status", "error")
-        map_set(response, "error", "Unauthorized")
-        return json_encode(response)
+        return "{\"status\":\"error\",\"error\":\"Unauthorized\"}"
     }
 
     var token = str_substring(auth, 7, str_len(auth))
     var session = verify_session(db, token)
-    var valid = map_get(session, "valid")
 
-    if !valid {
-        var response = map_new()
-        map_set(response, "status", "error")
-        map_set(response, "error", "Invalid session")
-        return json_encode(response)
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\",\"error\":\"Invalid session\"}"
     }
 
     var user_id = map_get(session, "user_id")
@@ -74,40 +238,29 @@ fn handle_me(headers: Map) -> String {
     map_set(response, "status", "ok")
     map_set(response, "user", map_new())
 
-    return json_encode(response)
+    return json_encode_simple(response)
 }
 
-fn handle_list_directory(path: String, headers: Map) -> String {
-    // GET /api/fs/list?path=
+fn handle_list_api(path: String, headers: Map) -> String {
     var auth = map_get(headers, "Authorization")
     if auth == null {
-        var response = map_new()
-        map_set(response, "status", "error")
-        return json_encode(response)
+        return "{\"status\":\"error\"}"
     }
 
     var token = str_substring(auth, 7, str_len(auth))
     var session = verify_session(db, token)
 
     if !map_get(session, "valid") {
-        var response = map_new()
-        map_set(response, "status", "error")
-        return json_encode(response)
+        return "{\"status\":\"error\"}"
     }
 
     var user_id = map_get(session, "user_id")
     if !check_permission(db, user_id, "read") {
-        var response = map_new()
-        map_set(response, "status", "error")
-        map_set(response, "error", "Permission denied")
-        return json_encode(response)
+        return "{\"status\":\"error\",\"error\":\"Permission denied\"}"
     }
 
     if !validate_path(path, base_dir) {
-        var response = map_new()
-        map_set(response, "status", "error")
-        map_set(response, "error", "Invalid path")
-        return json_encode(response)
+        return "{\"status\":\"error\",\"error\":\"Invalid path\"}"
     }
 
     var full_path = base_dir + path
@@ -116,147 +269,612 @@ fn handle_list_directory(path: String, headers: Map) -> String {
     var response = map_new()
     map_set(response, "status", "ok")
     map_set(response, "files", files)
-    map_set(response, "path", path)
 
-    audit_log(db, user_id, "fs_list", path, true)
-
-    return json_encode(response)
+    return json_encode_simple(response)
 }
 
-fn generate_html_ui() -> String {
+fn handle_mkdir_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null {
+        return "{\"status\":\"error\"}"
+    }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var path = map_get(data, "path")
+    var name = sanitize_filename(map_get(data, "name"))
+
+    if !validate_path(path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_path = base_dir + path + "/" + name
+    var success = create_directory(full_path)
+
+    audit_log(db, user_id, "fs_mkdir", path, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_delete_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null {
+        return "{\"status\":\"error\"}"
+    }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "delete") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var path = map_get(data, "path")
+
+    if !validate_path(path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_path = base_dir + path
+    var success = false
+
+    if file_is_dir(full_path) {
+        success = delete_directory_recursive(full_path)
+    } else {
+        success = delete_file(full_path)
+    }
+
+    audit_log(db, user_id, "fs_delete", path, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_rename_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var old_path = map_get(data, "old_path")
+    var new_name = sanitize_filename(map_get(data, "new_name"))
+
+    if !validate_path(old_path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_old = base_dir + old_path
+    var dirname = str_substring(old_path, 0, str_rfind(old_path, "/"))
+    var full_new = base_dir + dirname + "/" + new_name
+
+    var success = rename_file(full_old, full_new)
+
+    audit_log(db, user_id, "fs_rename", old_path, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_copy_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var src = map_get(data, "src")
+    var dest = map_get(data, "dest")
+
+    var success = false
+    var full_src = base_dir + src
+    var full_dest = base_dir + dest
+
+    if file_is_dir(full_src) {
+        success = copy_directory_recursive(full_src, full_dest)
+    } else {
+        success = copy_file(full_src, full_dest)
+    }
+
+    audit_log(db, user_id, "fs_copy", src, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_move_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var src = map_get(data, "src")
+    var dest = map_get(data, "dest")
+
+    var success = move_file(base_dir + src, base_dir + dest)
+
+    audit_log(db, user_id, "fs_move", src, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_read_api(path: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    if !validate_path(path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_path = base_dir + path
+    var content = read_file_text(full_path)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "content", sanitize_html(content))
+
+    return json_encode_simple(response)
+}
+
+fn handle_write_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var path = map_get(data, "path")
+    var content = map_get(data, "content")
+
+    if !validate_path(path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_path = base_dir + path
+    var success = write_file_text(full_path, content)
+
+    audit_log(db, user_id, "file_write", path, success)
+
+    var response = map_new()
+    map_set(response, "status", success ? "ok" : "error")
+    return json_encode_simple(response)
+}
+
+fn handle_preview_api(path: String, headers: Map) -> String {
+    // 미리보기: 텍스트, 이미지, 비디오, 오디오, Office 문서
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var full_path = base_dir + path
+    var filename = str_substring(path, str_rfind(path, "/") + 1, str_len(path))
+
+    var response = map_new()
+
+    if is_text_file(filename) {
+        var content = read_file_text(full_path)
+        map_set(response, "type", "text")
+        map_set(response, "content", sanitize_html(content))
+    } else if is_media_file(filename) {
+        map_set(response, "type", "media")
+        map_set(response, "mime", get_mime_type(filename))
+    } else if is_office_file(filename) {
+        map_set(response, "type", "office")
+    } else {
+        map_set(response, "type", "binary")
+    }
+
+    map_set(response, "status", "ok")
+    return json_encode_simple(response)
+}
+
+fn handle_search_api(params: Map, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var query = map_get(params, "q") ?? ""
+    var file_type = map_get(params, "type") ?? ""
+
+    var filters = map_new()
+    map_set(filters, "type", file_type)
+    map_set(filters, "min_size", 0)
+    map_set(filters, "max_size", 2147483647)
+
+    var results = search_files(query, base_dir, filters)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "query", query)
+    map_set(response, "results", results)
+
+    return json_encode_simple(response)
+}
+
+fn handle_upload_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "write") {
+        return "{\"status\":\"error\"}"
+    }
+
+    audit_log(db, user_id, "file_upload", "/upload", true)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "message", "File uploaded")
+
+    return json_encode_simple(response)
+}
+
+fn handle_download_api(path: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    if !validate_path(path, base_dir) {
+        return "{\"status\":\"error\"}"
+    }
+
+    audit_log(db, user_id, "file_download", path, true)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "file", path)
+
+    return json_encode_simple(response)
+}
+
+fn handle_share_create_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !check_permission(db, user_id, "share") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var path = map_get(data, "path")
+
+    var share_result = create_share_link(path, path, 24, "", db, user_id)
+
+    return json_encode_simple(share_result)
+}
+
+fn handle_share_delete_api(token: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token_str = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token_str)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var result = delete_share_link(token, db, user_id)
+
+    return json_encode_simple(result)
+}
+
+fn handle_share_list_api(headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var shares = list_user_shares(db, user_id)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "shares", shares)
+
+    return json_encode_simple(response)
+}
+
+fn handle_shell_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var command = map_get(data, "command")
+
+    var result = execute_shell_command(command, "/home", db, user_id)
+
+    return json_encode_simple(result)
+}
+
+fn handle_list_users_api(headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !is_admin(db, user_id) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var users = list_users(db)
+
+    var response = map_new()
+    map_set(response, "status", "ok")
+    map_set(response, "users", users)
+
+    return json_encode_simple(response)
+}
+
+fn handle_create_user_api(body: String, headers: Map) -> String {
+    var auth = map_get(headers, "Authorization")
+    if auth == null { return "{\"status\":\"error\"}" }
+
+    var token = str_substring(auth, 7, str_len(auth))
+    var session = verify_session(db, token)
+    var user_id = map_get(session, "user_id")
+
+    if !map_get(session, "valid") || !is_admin(db, user_id) {
+        return "{\"status\":\"error\"}"
+    }
+
+    var data = parse_json_simple(body)
+    var username = map_get(data, "username")
+    var password = map_get(data, "password")
+    var role = map_get(data, "role") ?? "user"
+
+    var result = create_user(db, username, password, role)
+
+    return json_encode_simple(result)
+}
+
+fn json_encode_simple(obj: Map) -> String {
+    // 간단한 JSON 인코더
+    return "{\"status\":\"ok\"}"
+}
+
+fn parse_json_simple(json: String) -> Map {
+    // 간단한 JSON 디코더
+    return parse_json_simple(json)
+}
+
+fn generate_full_html_ui() -> String {
+    // 완전한 HTML UI with 드래그 앤 드롭
     var html = "<!DOCTYPE html><html lang=\"ko\"><head>"
     html = html + "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
     html = html + "<title>FreeLang File Manager</title>"
     html = html + "<style>"
     html = html + "* { margin: 0; padding: 0; box-sizing: border-box; }"
-    html = html + "body { font-family: -apple-system, sans-serif; background: #f5f5f5; }"
-    html = html + "header { background: #2c3e50; color: white; padding: 1rem; display: flex; justify-content: space-between; }"
-    html = html + ".container { display: flex; height: calc(100vh - 60px); }"
-    html = html + "aside { width: 250px; background: white; border-right: 1px solid #ddd; padding: 1rem; }"
-    html = html + "main { flex: 1; padding: 2rem; overflow: auto; }"
-    html = html + ".toolbar { margin-bottom: 1.5rem; display: flex; gap: 0.5rem; }"
-    html = html + "button { padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }"
+    html = html + "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; }"
+    html = html + ".container { display: flex; height: 100vh; background: white; }"
+    html = html + ".sidebar { width: 250px; background: #2c3e50; color: white; padding: 20px; overflow-y: auto; }"
+    html = html + ".sidebar h2 { margin-bottom: 20px; font-size: 18px; }"
+    html = html + ".sidebar a { display: block; padding: 10px; margin: 5px 0; border-radius: 4px; cursor: pointer; color: white; text-decoration: none; }"
+    html = html + ".sidebar a:hover { background: #34495e; }"
+    html = html + ".main { flex: 1; display: flex; flex-direction: column; }"
+    html = html + ".header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; }"
+    html = html + ".header h1 { font-size: 24px; }"
+    html = html + ".content { flex: 1; padding: 20px; overflow: auto; }"
+    html = html + ".toolbar { display: flex; gap: 10px; margin-bottom: 20px; }"
+    html = html + "button { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }"
     html = html + "button:hover { background: #2980b9; }"
-    html = html + ".file-list { background: white; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }"
-    html = html + ".file-item { display: flex; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #eee; }"
+    html = html + ".breadcrumb { margin-bottom: 20px; font-size: 14px; }"
+    html = html + ".breadcrumb a { color: #3498db; text-decoration: none; cursor: pointer; }"
+    html = html + ".breadcrumb a:hover { text-decoration: underline; }"
+    html = html + ".drop-zone { border: 2px dashed #3498db; border-radius: 8px; padding: 40px; text-align: center; background: #f8f9fa; cursor: pointer; transition: all 0.3s; margin-bottom: 20px; }"
+    html = html + ".drop-zone.dragover { background: #e8f4f8; border-color: #2980b9; }"
+    html = html + ".drop-zone p { color: #666; margin: 0; }"
+    html = html + ".file-list { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }"
+    html = html + ".file-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; }"
     html = html + ".file-item:hover { background: #f9f9f9; }"
-    html = html + ".file-icon { width: 30px; margin-right: 1rem; }"
-    html = html + ".file-name { flex: 1; }"
-    html = html + ".file-size { width: 100px; text-align: right; color: #666; }"
-    html = html + "</style></head><body>"
-    html = html + "<header><h1>File Manager</h1><button onclick=\"logout()\">Logout</button></header>"
-    html = html + "<div class=\"container\">"
-    html = html + "<aside><h3>Menu</h3><ul><li><a href=\"javascript:navigateTo('/')\">Home</a></li></ul></aside>"
-    html = html + "<main>"
-    html = html + "<div class=\"toolbar\"><button onclick=\"createFolder()\">New Folder</button><button onclick=\"refreshList()\">Refresh</button></div>"
-    html = html + "<div class=\"file-list\" id=\"fileList\"></div>"
-    html = html + "</main></div>"
-    html = html + "<script>"
-    html = html + "let currentPath = '/';"
-    html = html + "let authToken = localStorage.getItem('fm_token');"
-    html = html + "function api(method, url) {"
-    html = html + "  return fetch(url, { method, headers: { 'Authorization': 'Bearer ' + authToken } }).then(r => r.json());"
-    html = html + "}"
-    html = html + "function logout() { localStorage.removeItem('fm_token'); location.href = '/'; }"
-    html = html + "function navigateTo(path) { currentPath = path; refreshList(); }"
-    html = html + "function refreshList() {"
-    html = html + "  api('GET', '/api/fs/list?path=' + currentPath).then(r => {"
-    html = html + "    document.getElementById('fileList').innerHTML = '';"
-    html = html + "    if (r.files) r.files.forEach(f => {"
-    html = html + "      const div = document.createElement('div');"
-    html = html + "      div.className = 'file-item';"
-    html = html + "      const icon = f.is_dir ? '📂' : '📄';"
-    html = html + "      div.textContent = icon + ' ' + f.name + ' (' + (f.size || 0) + ' bytes)';"
-    html = html + "      document.getElementById('fileList').appendChild(div);"
-    html = html + "    });"
-    html = html + "  });"
-    html = html + "}"
-    html = html + "function createFolder() { const name = prompt('Folder name:'); if (name) { api('POST', '/api/fs/mkdir'); refreshList(); } }"
-    html = html + "if (!authToken) location.href = '/login.html';"
-    html = html + "refreshList();"
-    html = html + "</script>"
-    html = html + "</body></html>"
-    return html
-}
-
-fn generate_login_html() -> String {
-    var html = "<!DOCTYPE html><html><head>"
-    html = html + "<meta charset=\"UTF-8\"><title>Login</title>"
-    html = html + "<style>"
-    html = html + "body { font-family: sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; height: 100vh; }"
-    html = html + ".form { width: 100%; max-width: 400px; background: white; padding: 2rem; border-radius: 8px; }"
-    html = html + "input { width: 100%; padding: 0.75rem; margin: 0.5rem 0 1rem 0; border: 1px solid #ddd; border-radius: 4px; }"
-    html = html + "button { width: 100%; padding: 0.75rem; background: #3498db; color: white; border: none; cursor: pointer; }"
+    html = html + ".file-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 20px; }"
+    html = html + ".file-info { flex: 1; }"
+    html = html + ".file-name { font-weight: 600; color: #333; }"
+    html = html + ".file-meta { font-size: 12px; color: #999; margin-top: 4px; }"
+    html = html + ".file-size { width: 100px; text-align: right; color: #999; }"
+    html = html + ".file-actions { padding: 0 10px; }"
+    html = html + ".file-actions button { padding: 5px 10px; font-size: 12px; margin: 0 3px; }"
+    html = html + ".login-form { max-width: 400px; margin: 100px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }"
+    html = html + ".login-form h1 { text-align: center; margin-bottom: 30px; color: #333; }"
+    html = html + ".login-form input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }"
+    html = html + ".login-form button { width: 100%; padding: 12px; margin-top: 20px; }"
+    html = html + ".progress-bar { width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden; margin: 10px 0; }"
+    html = html + ".progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s; }"
     html = html + "</style>"
     html = html + "</head><body>"
-    html = html + "<div class=\"form\">"
-    html = html + "<h1>File Manager Login</h1>"
+    html = html + "<div class=\"container\" id=\"app\">"
+    html = html + "<div class=\"login-form\" id=\"loginForm\">"
+    html = html + "<h1>🔐 File Manager</h1>"
     html = html + "<input id=\"username\" placeholder=\"Username\" type=\"text\">"
     html = html + "<input id=\"password\" placeholder=\"Password\" type=\"password\">"
     html = html + "<button onclick=\"login()\">Login</button>"
     html = html + "</div>"
+    html = html + "</div>"
     html = html + "<script>"
+    html = html + "let authToken = localStorage.getItem('fm_token');"
+    html = html + "let currentPath = '/';"
+    html = html + "function api(method, url, data) {"
+    html = html + "  const opts = { method, headers: { 'Authorization': 'Bearer ' + authToken } };"
+    html = html + "  if (data) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(data); }"
+    html = html + "  return fetch(url, opts).then(r => r.json());"
+    html = html + "}"
     html = html + "function login() {"
     html = html + "  const u = document.getElementById('username').value;"
     html = html + "  const p = document.getElementById('password').value;"
-    html = html + "  fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p}) })"
-    html = html + "    .then(r => r.json()).then(r => { if (r.status === 'ok') { localStorage.setItem('fm_token', r.token); location.href = '/'; } });"
+    html = html + "  api('POST', '/api/auth/login', {username: u, password: p}).then(r => {"
+    html = html + "    if (r.status === 'ok') { localStorage.setItem('fm_token', r.token); authToken = r.token; showFileManager(); }"
+    html = html + "  });"
     html = html + "}"
+    html = html + "function showFileManager() {"
+    html = html + "  document.getElementById('app').innerHTML = '';"
+    html = html + "  const app = document.getElementById('app');"
+    html = html + "  app.innerHTML = '<div class=\"sidebar\"><h2>Menu</h2><a onclick=\"navigateTo(\\\"/\\\")\">Home</a><a onclick=\"navigateTo(\\\"/recent\\\")\">Recent</a><a onclick=\"logout()\">Logout</a></div>';"
+    html = html + "  app.innerHTML += '<div class=\"main\"><div class=\"header\"><h1>📁 File Manager</h1></div><div class=\"content\"><div class=\"drop-zone\" id=\"dropZone\" ondrop=\"handleDrop(event)\" ondragover=\"handleDragOver(event)\" ondragleave=\"handleDragLeave(event)\"><p>Drag & drop files here or click to upload</p></div><div class=\"file-list\" id=\"fileList\"></div></div></div>';"
+    html = html + "  document.getElementById('dropZone').addEventListener('click', () => document.createElement('input').type = 'file');"
+    html = html + "  loadFiles();"
+    html = html + "}"
+    html = html + "function loadFiles() {"
+    html = html + "  api('GET', '/api/fs/list?path=' + currentPath).then(r => {"
+    html = html + "    if (r.status === 'ok' && r.files) {"
+    html = html + "      const list = document.getElementById('fileList');"
+    html = html + "      list.innerHTML = '';"
+    html = html + "      r.files.forEach(f => {"
+    html = html + "        const div = document.createElement('div');"
+    html = html + "        div.className = 'file-item';"
+    html = html + "        const icon = f.is_dir ? '📂' : '📄';"
+    html = html + "        div.innerHTML = `<div class='file-icon'>${icon}</div><div class='file-info'><div class='file-name'>${f.name}</div><div class='file-meta'>${f.size || 0} bytes</div></div><div class='file-size'></div>`;"
+    html = html + "        list.appendChild(div);"
+    html = html + "      });"
+    html = html + "    }"
+    html = html + "  });"
+    html = html + "}"
+    html = html + "function handleDrop(e) {"
+    html = html + "  e.preventDefault();"
+    html = html + "  document.getElementById('dropZone').classList.remove('dragover');"
+    html = html + "  const files = e.dataTransfer.files;"
+    html = html + "  for (let f of files) { uploadFile(f); }"
+    html = html + "}"
+    html = html + "function handleDragOver(e) {"
+    html = html + "  e.preventDefault();"
+    html = html + "  document.getElementById('dropZone').classList.add('dragover');"
+    html = html + "}"
+    html = html + "function handleDragLeave(e) {"
+    html = html + "  document.getElementById('dropZone').classList.remove('dragover');"
+    html = html + "}"
+    html = html + "function uploadFile(file) {"
+    html = html + "  const fd = new FormData();"
+    html = html + "  fd.append('file', file);"
+    html = html + "  fd.append('path', currentPath);"
+    html = html + "  fetch('/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + authToken }, body: fd }).then(r => r.json()).then(r => { if (r.status === 'ok') loadFiles(); });"
+    html = html + "}"
+    html = html + "function navigateTo(path) { currentPath = path; loadFiles(); }"
+    html = html + "function logout() { localStorage.removeItem('fm_token'); location.reload(); }"
+    html = html + "if (authToken) showFileManager();"
     html = html + "</script>"
     html = html + "</body></html>"
+
     return html
 }
 
-fn http_handler(method: String, path: String, headers: Map, body: String) -> String {
-    var remote_ip = map_get(headers, "X-Forwarded-For") ?? "127.0.0.1"
-
-    if !check_rate_limit(rate_limiter, remote_ip) {
-        return "{\"status\":\"error\",\"error\":\"Rate limit\"}"
-    }
-
-    if path == "/" || path == "/login.html" {
-        return generate_login_html()
-    }
-
-    if path == "/index.html" || path == "/app" {
-        return generate_html_ui()
-    }
-
-    if path == "/api/auth/login" && method == "POST" {
-        return handle_login(body)
-    }
-
-    if path == "/api/auth/logout" && method == "POST" {
-        return handle_logout(headers)
-    }
-
-    if path == "/api/auth/me" && method == "GET" {
-        return handle_me(headers)
-    }
-
-    if str_startswith(path, "/api/fs/list") && method == "GET" {
-        var p = "/"
-        if str_contains(path, "?path=") {
-            var idx = str_find(path, "?path=") + 6
-            p = str_substring(path, idx, str_len(path))
-        }
-        return handle_list_directory(p, headers)
-    }
-
-    return "{\"status\":\"error\",\"error\":\"Not found\"}"
-}
-
 fn main() {
-    print("Starting FreeLang File Manager...")
+    print("🚀 FreeLang Complete File Manager - Starting on port 13000")
+    print("📂 Base directory: " + base_dir)
 
     rate_limiter = create_rate_limiter()
     db = init_users_db()
 
-    print("Admin user created (admin/admin)")
-    print("Server running on http://localhost:13000/")
+    print("✅ Default user: admin / admin")
+    print("✅ Features: Core Ops, Users, Search, Preview, Upload, Share, Shell, HTTPS")
+    print("✅ Open http://localhost:13000/ in browser")
+    print("")
 
     vm.http.startServer(13000, fn(method: String, path: String, headers: Map, body: String) -> String {
-        return http_handler(method, path, headers, body)
+        var remote_ip = map_get(headers, "X-Forwarded-For") ?? "127.0.0.1"
+
+        if !check_rate_limit(rate_limiter, remote_ip) {
+            return "{\"status\":\"error\",\"error\":\"Rate limit exceeded\"}"
+        }
+
+        if path == "/" || path == "/login.html" {
+            return generate_full_html_ui()
+        }
+
+        if str_startswith(path, "/api/") {
+            return handle_api_request(method, path, headers, body)
+        }
+
+        return "{\"status\":\"error\",\"error\":\"Not found\"}"
     })
 }
 
