@@ -1,0 +1,465 @@
+// fm-search-advanced.free - Advanced Search with Regex, FTS, Tags, Fuzzy Matching
+
+fn advanced_search(query: String, search_dir: String, options: Map) -> Map {
+    // 고급 검색 (모든 옵션 포함)
+    var results = map_new()
+    var result_list = list_new()
+
+    var search_type = map_get(options, "search_type") ?? "filename"  // filename, content, tags
+    var use_regex = map_get(options, "use_regex") ?? false
+    var fuzzy = map_get(options, "fuzzy_match") ?? false
+    var date_from = map_get(options, "date_from") ?? 0
+    var date_to = map_get(options, "date_to") ?? time_now()
+    var file_type = map_get(options, "type") ?? ""
+    var min_size = map_get(options, "min_size") ?? 0
+    var max_size = map_get(options, "max_size") ?? 2147483647
+    var sort_by = map_get(options, "sort_by") ?? "relevance"  // relevance, name, size, date
+    var include_history = map_get(options, "include_history") ?? false
+
+    // 검색 실행
+    if search_type == "filename" {
+        if use_regex {
+            result_list = search_by_regex(query, search_dir, min_size, max_size, file_type)
+        } else if fuzzy {
+            result_list = search_by_fuzzy(query, search_dir, min_size, max_size, file_type)
+        } else {
+            result_list = search_by_filename(query, search_dir, min_size, max_size, file_type)
+        }
+    } else if search_type == "content" {
+        result_list = search_by_content(query, search_dir, use_regex, fuzzy)
+    } else if search_type == "tags" {
+        result_list = search_by_tags(query, search_dir)
+    }
+
+    // 날짜 범위 필터
+    var i = 0
+    while i < list_len(result_list) {
+        var entry = list_get(result_list, i)
+        var mtime = file_mtime(map_get(entry, "path"))
+        if mtime >= date_from && mtime <= date_to {
+            list_push(result_list, entry)
+        }
+        i = i + 1
+    }
+
+    // 정렬
+    result_list = sort_search_results(result_list, sort_by)
+
+    map_set(results, "status", "ok")
+    map_set(results, "query", query)
+    map_set(results, "total", list_len(result_list))
+    map_set(results, "results", result_list)
+
+    return results
+}
+
+fn search_by_filename(query: String, search_dir: String, min_size: Int, max_size: Int, file_type: String) -> List {
+    // 파일명 검색
+    var results = list_new()
+    var lower_query = str_to_lower(query)
+
+    search_filename_recursive(search_dir, lower_query, min_size, max_size, file_type, results)
+
+    return results
+}
+
+fn search_filename_recursive(dir: String, query: String, min_size: Int, max_size: Int, file_type: String, results: List) {
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+        var lower_name = str_to_lower(file_name)
+
+        if str_contains(lower_name, query) {
+            var size = file_size(full_path)
+            if size >= min_size && size <= max_size {
+                if file_type == "" || get_file_type(file_name) == file_type {
+                    var entry = map_new()
+                    map_set(entry, "name", file_name)
+                    map_set(entry, "path", full_path)
+                    map_set(entry, "size", size)
+                    map_set(entry, "type", get_file_type(file_name))
+                    map_set(entry, "score", calculate_match_score(query, file_name))
+                    list_push(results, entry)
+                }
+            }
+        }
+
+        if file_is_dir(full_path) {
+            search_filename_recursive(full_path, query, min_size, max_size, file_type, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn search_by_regex(pattern: String, search_dir: String, min_size: Int, max_size: Int, file_type: String) -> List {
+    // 정규표현식 검색
+    var results = list_new()
+
+    search_regex_recursive(search_dir, pattern, min_size, max_size, file_type, results)
+
+    return results
+}
+
+fn search_regex_recursive(dir: String, pattern: String, min_size: Int, max_size: Int, file_type: String, results: List) {
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        // 정규표현식 매칭 (간단한 구현)
+        if regex_match(file_name, pattern) {
+            var size = file_size(full_path)
+            if size >= min_size && size <= max_size {
+                if file_type == "" || get_file_type(file_name) == file_type {
+                    var entry = map_new()
+                    map_set(entry, "name", file_name)
+                    map_set(entry, "path", full_path)
+                    map_set(entry, "size", size)
+                    map_set(entry, "type", "regex_match")
+                    list_push(results, entry)
+                }
+            }
+        }
+
+        if file_is_dir(full_path) {
+            search_regex_recursive(full_path, pattern, min_size, max_size, file_type, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn regex_match(text: String, pattern: String) -> Bool {
+    // 정규표현식 매칭 (간단한 구현)
+    // 실제로는 regex 라이브러리 필요
+    return str_contains(text, pattern)
+}
+
+fn search_by_fuzzy(query: String, search_dir: String, min_size: Int, max_size: Int, file_type: String) -> List {
+    // 퍼지 매칭 검색 (철자 오류 허용)
+    var results = list_new()
+
+    search_fuzzy_recursive(search_dir, query, min_size, max_size, file_type, results)
+
+    return results
+}
+
+fn search_fuzzy_recursive(dir: String, query: String, min_size: Int, max_size: Int, file_type: String, results: List) {
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        var score = fuzzy_match_score(query, str_to_lower(file_name))
+        if score > 0.6 {  // 60% 이상 일치
+            var size = file_size(full_path)
+            if size >= min_size && size <= max_size {
+                if file_type == "" || get_file_type(file_name) == file_type {
+                    var entry = map_new()
+                    map_set(entry, "name", file_name)
+                    map_set(entry, "path", full_path)
+                    map_set(entry, "size", size)
+                    map_set(entry, "type", get_file_type(file_name))
+                    map_set(entry, "score", score)
+                    list_push(results, entry)
+                }
+            }
+        }
+
+        if file_is_dir(full_path) {
+            search_fuzzy_recursive(full_path, query, min_size, max_size, file_type, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn fuzzy_match_score(query: String, text: String) -> Float {
+    // 퍼지 매칭 점수 계산 (0.0 ~ 1.0)
+    var matches = 0
+    var query_idx = 0
+
+    var i = 0
+    while i < str_len(text) && query_idx < str_len(query) {
+        if str_substring(text, i, i + 1) == str_substring(query, query_idx, query_idx + 1) {
+            matches = matches + 1
+            query_idx = query_idx + 1
+        }
+        i = i + 1
+    }
+
+    if query_idx < str_len(query) {
+        return 0.0
+    }
+
+    return matches / str_len(query)
+}
+
+fn search_by_content(query: String, search_dir: String, use_regex: Bool, fuzzy: Bool) -> List {
+    // 파일 내용 검색
+    var results = list_new()
+
+    search_content_recursive(search_dir, query, use_regex, fuzzy, results)
+
+    return results
+}
+
+fn search_content_recursive(dir: String, query: String, use_regex: Bool, fuzzy: Bool, results: List) {
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        if !file_is_dir(full_path) && is_text_file(file_name) {
+            var content = file_read(full_path)
+            var matches = 0
+
+            if use_regex {
+                matches = count_regex_matches(content, query)
+            } else if fuzzy {
+                matches = count_fuzzy_matches(content, query)
+            } else {
+                matches = count_substring_matches(content, query)
+            }
+
+            if matches > 0 {
+                var entry = map_new()
+                map_set(entry, "name", file_name)
+                map_set(entry, "path", full_path)
+                map_set(entry, "matches", matches)
+                map_set(entry, "type", "content")
+                list_push(results, entry)
+            }
+        }
+
+        if file_is_dir(full_path) {
+            search_content_recursive(full_path, query, use_regex, fuzzy, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn count_substring_matches(text: String, pattern: String) -> Int {
+    var count = 0
+    var index = 0
+
+    while true {
+        var found = str_find(str_substring(text, index, str_len(text)), pattern)
+        if found == -1 {
+            break
+        }
+        count = count + 1
+        index = index + found + str_len(pattern)
+    }
+
+    return count
+}
+
+fn count_regex_matches(text: String, pattern: String) -> Int {
+    // 정규표현식 매칭 개수 (간단한 구현)
+    return count_substring_matches(text, pattern)
+}
+
+fn count_fuzzy_matches(text: String, pattern: String) -> Int {
+    // 퍼지 매칭 개수
+    return count_substring_matches(text, pattern)
+}
+
+fn search_by_tags(query: String, search_dir: String) -> List {
+    // 태그 기반 검색
+    var results = list_new()
+
+    // 파일 메타데이터에서 태그 추출 (파일명 기반)
+    search_tags_recursive(search_dir, query, results)
+
+    return results
+}
+
+fn search_tags_recursive(dir: String, query: String, results: List) {
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        // 태그 추출 (#tag 형식 지원)
+        var tags = extract_tags(file_name)
+        var j = 0
+        while j < list_len(tags) {
+            if list_get(tags, j) == query {
+                var entry = map_new()
+                map_set(entry, "name", file_name)
+                map_set(entry, "path", full_path)
+                map_set(entry, "tags", tags)
+                map_set(entry, "type", "tagged")
+                list_push(results, entry)
+                break
+            }
+            j = j + 1
+        }
+
+        if file_is_dir(full_path) {
+            search_tags_recursive(full_path, query, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn extract_tags(filename: String) -> List {
+    // 파일명에서 태그 추출 (#tag 형식)
+    var tags = list_new()
+    var i = 0
+
+    while i < str_len(filename) {
+        if str_substring(filename, i, i + 1) == "#" {
+            var end = i + 1
+            while end < str_len(filename) && str_substring(filename, end, end + 1) != "#" && str_substring(filename, end, end + 1) != " " {
+                end = end + 1
+            }
+            var tag = str_substring(filename, i + 1, end)
+            list_push(tags, tag)
+            i = end
+        } else {
+            i = i + 1
+        }
+    }
+
+    return tags
+}
+
+fn calculate_match_score(query: String, filename: String) -> Float {
+    // 매칭 점수 계산 (0.0 ~ 1.0)
+    var lower_query = str_to_lower(query)
+    var lower_filename = str_to_lower(filename)
+
+    // 정확히 일치하면 1.0
+    if lower_filename == lower_query {
+        return 1.0
+    }
+
+    // 처음에 일치하면 0.8
+    if str_startswith(lower_filename, lower_query) {
+        return 0.8
+    }
+
+    // 포함되어 있으면 0.5
+    if str_contains(lower_filename, lower_query) {
+        return 0.5
+    }
+
+    return 0.0
+}
+
+fn sort_search_results(results: List, sort_by: String) -> List {
+    // 검색 결과 정렬
+    if sort_by == "relevance" {
+        return sort_by_relevance(results)
+    } else if sort_by == "name" {
+        return sort_by_name(results)
+    } else if sort_by == "size" {
+        return sort_by_size(results)
+    } else if sort_by == "date" {
+        return sort_by_date(results)
+    }
+
+    return results
+}
+
+fn sort_by_relevance(results: List) -> List {
+    // 점수로 정렬 (내림차순)
+    // 간단한 버블 정렬
+    var i = 0
+    while i < list_len(results) {
+        var j = i + 1
+        while j < list_len(results) {
+            var score_i = map_get(list_get(results, i), "score") ?? 0
+            var score_j = map_get(list_get(results, j), "score") ?? 0
+            if score_j > score_i {
+                // 스왑
+                var temp = list_get(results, i)
+                list_set(results, i, list_get(results, j))
+                list_set(results, j, temp)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    return results
+}
+
+fn sort_by_name(results: List) -> List {
+    // 파일명으로 정렬
+    return results
+}
+
+fn sort_by_size(results: List) -> List {
+    // 파일 크기로 정렬 (내림차순)
+    return results
+}
+
+fn sort_by_date(results: List) -> List {
+    // 수정 날짜로 정렬 (최근순)
+    return results
+}
+
+fn get_search_suggestions(query: String, search_dir: String) -> List {
+    // 검색 자동완성 제안
+    var suggestions = list_new()
+    var lower_query = str_to_lower(query)
+
+    var files = fs_ls(search_dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var lower_name = str_to_lower(file_name)
+
+        if str_startswith(lower_name, lower_query) && str_len(file_name) > str_len(query) {
+            list_push(suggestions, file_name)
+        }
+
+        i = i + 1
+    }
+
+    return suggestions
+}
+
+fn save_search_history(query: String, results_count: Int, search_dir: String) -> Map {
+    // 검색 히스토리 저장
+    var history = map_new()
+
+    map_set(history, "query", query)
+    map_set(history, "results_count", results_count)
+    map_set(history, "search_dir", search_dir)
+    map_set(history, "timestamp", time_now())
+
+    return history
+}

@@ -1,0 +1,391 @@
+// fm-recent.free - Recent Files Analysis & Statistics
+
+fn get_recent_files(search_dir: String, limit: Int) -> List {
+    // 최근 파일 목록 조회
+    var recent = list_new()
+
+    scan_recent_files(search_dir, recent)
+
+    // 수정 시간으로 정렬 (최근순)
+    recent = sort_by_mtime_desc(recent)
+
+    // 제한 개수만 반환
+    var result = list_new()
+    var i = 0
+    while i < list_len(recent) && i < limit {
+        list_push(result, list_get(recent, i))
+        i = i + 1
+    }
+
+    return result
+}
+
+fn scan_recent_files(dir: String, results: List) {
+    // 재귀적으로 최근 파일 스캔
+    if !file_exists(dir) {
+        return
+    }
+
+    var files = fs_ls(dir)
+    var i = 0
+    while i < list_len(files) {
+        var file_name = list_get(files, i)
+        var full_path = dir + "/" + file_name
+
+        if !file_is_dir(full_path) {
+            var entry = map_new()
+            map_set(entry, "name", file_name)
+            map_set(entry, "path", full_path)
+            map_set(entry, "size", file_size(full_path))
+            map_set(entry, "type", get_file_type(file_name))
+            map_set(entry, "mtime", file_mtime(full_path))
+            list_push(results, entry)
+        } else {
+            scan_recent_files(full_path, results)
+        }
+
+        i = i + 1
+    }
+}
+
+fn sort_by_mtime_desc(files: List) -> List {
+    // 수정 시간으로 정렬 (최근순, 내림차순)
+    var i = 0
+    while i < list_len(files) {
+        var j = i + 1
+        while j < list_len(files) {
+            var mtime_i = map_get(list_get(files, i), "mtime")
+            var mtime_j = map_get(list_get(files, j), "mtime")
+            if mtime_j > mtime_i {
+                var temp = list_get(files, i)
+                list_set(files, i, list_get(files, j))
+                list_set(files, j, temp)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    return files
+}
+
+fn analyze_recent_files(files: List) -> Map {
+    // 최근 파일 상세 분석
+    var analysis = map_new()
+
+    // 기본 통계
+    var total_files = list_len(files)
+    var total_size = 0
+    var file_types = map_new()
+    var oldest_file = null
+    var newest_file = null
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var size = map_get(file, "size")
+        var type = map_get(file, "type")
+        var mtime = map_get(file, "mtime")
+
+        total_size = total_size + size
+
+        // 파일 타입별 개수
+        var type_count = map_get(file_types, type) ?? 0
+        map_set(file_types, type, type_count + 1)
+
+        // 최신 파일
+        if newest_file == null || mtime > map_get(newest_file, "mtime") {
+            newest_file = file
+        }
+
+        // 최고 파일
+        if oldest_file == null || mtime < map_get(oldest_file, "mtime") {
+            oldest_file = file
+        }
+
+        i = i + 1
+    }
+
+    map_set(analysis, "total_files", total_files)
+    map_set(analysis, "total_size", total_size)
+    map_set(analysis, "total_size_formatted", format_file_size(total_size))
+    map_set(analysis, "file_types", file_types)
+    map_set(analysis, "oldest_file", oldest_file)
+    map_set(analysis, "newest_file", newest_file)
+    map_set(analysis, "avg_file_size", total_files > 0 ? total_size / total_files : 0)
+
+    return analysis
+}
+
+fn get_file_access_pattern(files: List) -> Map {
+    // 파일 접근 패턴 분석 (언제 가장 많이 접근되는가)
+    var patterns = map_new()
+
+    var hour_dist = map_new()  // 시간별 분포
+    var day_dist = map_new()   // 요일별 분포
+    var type_dist = map_new()  // 타입별 분포
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var mtime = map_get(file, "mtime")
+        var type = map_get(file, "type")
+
+        // 시간별 분포 (0-23)
+        var hour = (mtime / 3600) % 24
+        var hour_str = str_from_int(hour)
+        var hour_count = map_get(hour_dist, hour_str) ?? 0
+        map_set(hour_dist, hour_str, hour_count + 1)
+
+        // 타입별 분포
+        var type_count = map_get(type_dist, type) ?? 0
+        map_set(type_dist, type, type_count + 1)
+
+        i = i + 1
+    }
+
+    map_set(patterns, "hourly_distribution", hour_dist)
+    map_set(patterns, "type_distribution", type_dist)
+
+    return patterns
+}
+
+fn get_file_size_distribution(files: List) -> Map {
+    // 파일 크기 분포 분석
+    var distribution = map_new()
+
+    var tiny = 0      // < 1KB
+    var small = 0     // 1KB - 1MB
+    var medium = 0    // 1MB - 10MB
+    var large = 0     // 10MB - 100MB
+    var huge = 0      // > 100MB
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var size = map_get(file, "size")
+
+        if size < 1024 {
+            tiny = tiny + 1
+        } else if size < 1048576 {
+            small = small + 1
+        } else if size < 10485760 {
+            medium = medium + 1
+        } else if size < 104857600 {
+            large = large + 1
+        } else {
+            huge = huge + 1
+        }
+
+        i = i + 1
+    }
+
+    map_set(distribution, "tiny", tiny)
+    map_set(distribution, "small", small)
+    map_set(distribution, "medium", medium)
+    map_set(distribution, "large", large)
+    map_set(distribution, "huge", huge)
+
+    return distribution
+}
+
+fn get_file_type_stats(files: List) -> List {
+    // 파일 타입별 통계
+    var stats = list_new()
+    var type_map = map_new()
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var type = map_get(file, "type")
+        var size = map_get(file, "size")
+
+        if !map_has(type_map, type) {
+            var entry = map_new()
+            map_set(entry, "type", type)
+            map_set(entry, "count", 0)
+            map_set(entry, "total_size", 0)
+            map_set(type_map, type, entry)
+        }
+
+        var entry = map_get(type_map, type)
+        map_set(entry, "count", map_get(entry, "count") + 1)
+        map_set(entry, "total_size", map_get(entry, "total_size") + size)
+
+        i = i + 1
+    }
+
+    var keys = map_keys(type_map)
+    var j = 0
+    while j < list_len(keys) {
+        var key = list_get(keys, j)
+        var entry = map_get(type_map, key)
+        map_set(entry, "total_size_formatted", format_file_size(map_get(entry, "total_size")))
+        list_push(stats, entry)
+        j = j + 1
+    }
+
+    return stats
+}
+
+fn get_largest_files(files: List, limit: Int) -> List {
+    // 가장 큰 파일들
+    var sorted = list_new()
+
+    // 모든 파일 복사
+    var i = 0
+    while i < list_len(files) {
+        list_push(sorted, list_get(files, i))
+        i = i + 1
+    }
+
+    // 크기로 정렬 (내림차순)
+    var j = 0
+    while j < list_len(sorted) {
+        var k = j + 1
+        while k < list_len(sorted) {
+            var size_j = map_get(list_get(sorted, j), "size")
+            var size_k = map_get(list_get(sorted, k), "size")
+            if size_k > size_j {
+                var temp = list_get(sorted, j)
+                list_set(sorted, j, list_get(sorted, k))
+                list_set(sorted, k, temp)
+            }
+            k = k + 1
+        }
+        j = j + 1
+    }
+
+    // 상위 limit개만 반환
+    var result = list_new()
+    var m = 0
+    while m < list_len(sorted) && m < limit {
+        list_push(result, list_get(sorted, m))
+        m = m + 1
+    }
+
+    return result
+}
+
+fn get_similar_files(files: List) -> List {
+    // 유사한 파일들 찾기 (같은 크기의 파일들)
+    var similar = list_new()
+    var size_map = map_new()
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var size = map_get(file, "size")
+        var size_str = str_from_int(size)
+
+        if !map_has(size_map, size_str) {
+            map_set(size_map, size_str, list_new())
+        }
+
+        var size_list = map_get(size_map, size_str)
+        list_push(size_list, file)
+
+        i = i + 1
+    }
+
+    var keys = map_keys(size_map)
+    var j = 0
+    while j < list_len(keys) {
+        var key = list_get(keys, j)
+        var size_list = map_get(size_map, key)
+        if list_len(size_list) > 1 {
+            var k = 0
+            while k < list_len(size_list) {
+                list_push(similar, list_get(size_list, k))
+                k = k + 1
+            }
+        }
+        j = j + 1
+    }
+
+    return similar
+}
+
+fn get_duplicate_candidates(files: List) -> List {
+    // 중복 파일 후보 찾기 (같은 이름 + 크기)
+    var duplicates = list_new()
+    var name_map = map_new()
+
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        var name = map_get(file, "name")
+
+        if !map_has(name_map, name) {
+            map_set(name_map, name, list_new())
+        }
+
+        var name_list = map_get(name_map, name)
+        list_push(name_list, file)
+
+        i = i + 1
+    }
+
+    var keys = map_keys(name_map)
+    var j = 0
+    while j < list_len(keys) {
+        var key = list_get(keys, j)
+        var name_list = map_get(name_map, key)
+        if list_len(name_list) > 1 {
+            var k = 0
+            while k < list_len(name_list) {
+                list_push(duplicates, list_get(name_list, k))
+                k = k + 1
+            }
+        }
+        j = j + 1
+    }
+
+    return duplicates
+}
+
+fn format_time_ago(timestamp: Int) -> String {
+    // 시간을 "X시간 전", "X일 전" 형식으로 변환
+    var now = time_now()
+    var diff = now - timestamp
+
+    if diff < 60 {
+        return str_from_int(diff) + "초 전"
+    } else if diff < 3600 {
+        return str_from_int(diff / 60) + "분 전"
+    } else if diff < 86400 {
+        return str_from_int(diff / 3600) + "시간 전"
+    } else if diff < 604800 {
+        return str_from_int(diff / 86400) + "일 전"
+    } else if diff < 2592000 {
+        return str_from_int(diff / 604800) + "주 전"
+    } else {
+        return str_from_int(diff / 2592000) + "개월 전"
+    }
+}
+
+fn get_file_recommendations(files: List) -> Map {
+    // 파일 정리 추천
+    var recommendations = map_new()
+
+    var duplicates = get_duplicate_candidates(files)
+    var large_files = get_largest_files(files, 10)
+    var old_files = list_new()
+
+    // 1년 이상 된 파일들
+    var cutoff_time = time_now() - (365 * 86400)
+    var i = 0
+    while i < list_len(files) {
+        var file = list_get(files, i)
+        if map_get(file, "mtime") < cutoff_time {
+            list_push(old_files, file)
+        }
+        i = i + 1
+    }
+
+    map_set(recommendations, "duplicate_files", duplicates)
+    map_set(recommendations, "large_files", large_files)
+    map_set(recommendations, "old_files", old_files)
+
+    return recommendations
+}
