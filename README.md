@@ -1,36 +1,42 @@
-# 🏗️ Gogs AI 아키텍트 시스템
+# 🏗️ 서버 전체 AI 분석 봇
 
-> **277개 Gogs 저장소를 살아있는 AI 지식 베이스로 변환하는 자동화 시스템**
+> **서버 전체를 학습하는 AI 아키텍트: 코드를 제시하면 자동으로 유사한 패턴을 찾고 개선방안을 제안합니다**
 
-**상태**: 🟢 **Phase 5 완료** (20/20 단계) | **버전**: 1.0.0 | **날짜**: 2026-03-12
+**상태**: 🟢 **v2.0** (서버 기반) | **버전**: 2.0.0 | **날짜**: 2026-03-12
 
 ---
 
 ## 📋 개요
 
-이 프로젝트는 Gogs에 산재된 277개의 저장소를 **단순한 코드 창고가 아닌 살아있는 AI 지식 베이스**로 변환합니다.
+**"코드 aaa를 보여줄 때, 동일한 언어의 어떤 부분에서 사용했고, 이런 방향으로 가면 좋을까?"** 라는 사용자 요청을 구현합니다.
+
+이 시스템은 `/home/kimjin/Desktop/kim/` **전체 서버**를 학습하고:
+- 📁 23,677개 파일 스캔
+- 🧩 163,034개 코드/문서 청크 생성
+- 🔍 65,552개 키워드 인덱싱
+- 🤖 패턴 기반 분석 및 개선 제안
 
 ### 핵심 기능
 
-✨ **자동 코드 분석**
-- 277개 저장소 자동 스캔 및 인덱싱 (2.3초)
-- 멀티 언어 지원: `.free`, `.fl`, `.py`, `.ts`, `.js`, `.md`
-- 12,340 청크, 8,523 커밋, 142 ADR 자동 감지
+✨ **자동 서버 학습**
+- 서버 전체 재귀 스캔 (23K 파일, 69초)
+- 멀티 언어 지원: `.free`, `.fl`, `.py`, `.ts`, `.js`, `.c`, `.md` 등
+- 163K 청크, 65K 키워드 자동 인덱싱
 
-🤖 **AI 기반 아키텍처 조언**
-- Claude API + BM25 임베딩 (npm zero-dependency)
-- 하이브리드 RAG (키워드 + 의미 검색, 68ms)
-- 6개 전문 에이전트 (컴파일러, 성능, DB, 디버그, 문서, 아키텍처)
+🔎 **패턴 검색 및 분석**
+- 코드 패턴 입력 → 서버 전체에서 유사 패턴 검색
+- 사용 위치, 개선 방안 제시
+- 언어별/프로젝트별 분석
 
-🔄 **자동화 파이프라인**
-- Webhook 기반 실시간 재인덱싱 (< 1초)
-- 자동 코드 리뷰 및 이슈 생성
-- 선제적 설계 제안 (6시간 주기)
+🤖 **AI 기반 제안**
+- Claude API 기반 분석 (필요 시)
+- 로컬 키워드 검색 (즉시 결과)
+- 성능/메모리/에러처리 최적화 제안
 
-📊 **실시간 대시보드**
-- 지식 베이스 품질 지표 (85/100)
-- 시스템 상태 모니터링
-- CLI 기반 분석 도구
+📊 **간단한 인터페이스**
+- `quick-search.js`: 빠른 검색 (임베딩 없음)
+- `node src/cli.js`: 전체 기능
+- 결과: 파일 경로, 내용, 언어 정보
 
 ---
 
@@ -43,92 +49,87 @@ git clone https://gogs.dclub.kr/kim/gogs-architect.git
 cd gogs-architect
 ```
 
-### 2. Self-Hosting 모드 (권장)
+### 2. 서버 초기화 (첫 실행)
 
 ```bash
-# FreeLang 자기호스팅 (FreeLang 설치 시)
-./gogs-architect ask "질문"
-./gogs-architect analyze "패턴"
-./gogs-architect status
-
-# Node.js 폴백 (FreeLang 없으면 자동)
+# 전체 서버 스캔 및 인덱싱 (69초)
+node src/server-init.js
 ```
 
-### 3. 환경 설정 (선택)
+### 3. 빠른 검색 (권장)
 
 ```bash
-export GOGS_URL=https://gogs.dclub.kr
-export GOGS_TOKEN=7a79f8643f22a401e898780e0780c3ec0a93e674
-export WEBHOOK_PORT=9090
+# Python 코드 검색
+node src/quick-search.js "Python"
+
+# C 함수 검색
+node src/quick-search.js "main"
+
+# 특정 패턴 검색
+node src/quick-search.js "function"
 ```
 
-### 4. CLI 사용
+**결과:**
+- 파일 경로: `01_Active_Projects/dns-manager/dclub-cli.py`
+- 함수명: `cmd_init`
+- 언어: `python`
+- 내용 미리보기
+
+### 4. CLI 전체 기능 사용
 
 ```bash
-# 질문하기 (RAG 기반 검색)
-node src/cli.js ask "Range 메모리 버그의 원인은?"
+# 질문 응답 (로컬 분석)
+node src/cli.js ask "Python 프로젝트"
 
-# 종합 아키텍처 감사 (decision-engine)
-node src/cli.js audit
-
-# 전문 에이전트 분석 (팀 라우터: 6개 전문가)
-node src/cli.js route "성능 최적화 방법"
-
-# 코드 패턴 분석 (277개 저장소 검색)
-node src/cli.js analyze "for (let i = 0; i < n; i++) { array[i] += 1; }"
-
-# 선제적 설계 제안 (Phase 분석 + 의존성 부채)
-node src/cli.js proactive
-
-# 상태 확인
+# 상태 조회
 node src/cli.js status
 
-# 대시보드
-node src/cli.js dashboard
+# 패턴 분석 (277개 Gogs 대신 23K 로컬 파일 검색)
+node src/cli.js analyze "for (let i = 0; i < n; i++)"
 
 # 대화형 모드
 node src/cli.js chat
 ```
 
-### 5. Webhook 서버 시작
+### 5. 테스트
 
 ```bash
-node src/webhook-server.js
-```
+# 통합 테스트 (89% 통과)
+node tests/phase5-integration.js
 
-### 6. systemd 서비스 (선택)
-
-```bash
-sudo bash install.sh
-sudo systemctl status gogs-architect
+# 서버 인덱싱 + 검색 테스트
+node src/test-server.js
 ```
 
 ---
 
 ## 📊 시스템 구조
 
-### 18개 모듈 (5,000+ 줄 코드)
+### 주요 모듈
 
-| Phase | 모듈 | 역할 | 상태 |
-|-------|------|------|------|
-| 1 | gogs-client.js | REST API 래퍼 | ✅ |
-| 1 | scraper.js | 저장소 스캔 | ✅ |
-| 1 | parser.js | 코드 파싱 | ✅ |
-| 1 | commit-extractor.js | 커밋 분석 | ✅ |
-| 1 | knowledge-base.js | 지식 베이스 | ✅ |
-| 2 | embedder.js | BM25 임베딩 | ✅ |
-| 2 | rag-engine.js | RAG 검색 | ✅ |
-| 2 | architect-persona.js | AI 페르소나 | ✅ |
-| 2 | claude-client.js | Claude API | ✅ |
-| 3 | cli.js | CLI 인터페이스 | ✅ |
-| 3 | webhook-server.js | Webhook 수신 | ✅ |
-| 3 | reviewer.js | 자동 코드 리뷰 | ✅ |
-| 3 | issue-bot.js | 이슈 자동 생성 | ✅ |
-| 3.5 | pattern-analyzer.js | 패턴 분석 봇 | ✅ NEW |
-| 4 | team-router.js | 팀 라우터 (6 에이전트) | ✅ |
-| 4 | doc-updater.js | 자동 문서화 | ✅ |
-| 4 | proactive-agent.js | 선제적 제안 | ✅ |
-| 4 | dashboard.js | 실시간 대시보드 | ✅ |
+| 모듈 | 역할 | 상태 |
+|------|------|------|
+| **local-scanner.js** | 서버 전체 파일 스캔 (로컬) | ✅ NEW |
+| **server-indexer.js** | 파일 → 청크 분해 → 인덱싱 | ✅ NEW |
+| **server-init.js** | 서버 초기화 및 인덱싱 실행 | ✅ NEW |
+| **quick-search.js** | 빠른 키워드 검색 (임베딩 없음) | ✅ NEW |
+| parser.js | 다중 언어 코드 파싱 | ✅ |
+| knowledge-base.js | 메모리 기반 지식 베이스 | ✅ |
+| rag-engine.js | RAG 검색 엔진 | ✅ |
+| cli.js | CLI 인터페이스 (8개 명령어) | ✅ |
+| architect-persona.js | AI 분석 페르소나 | ✅ |
+| team-router.js | 6개 전문 에이전트 라우터 | ✅ |
+
+### v1.0 → v2.0 변경
+
+| 항목 | v1.0 (Gogs 기반) | v2.0 (서버 기반) |
+|------|-----------------|-----------------|
+| 대상 | 277개 Gogs 저장소 | 23,677개 로컬 파일 |
+| 인덱싱 | Gogs API | 로컬 파일시스템 |
+| 청크 | 12,340개 | 163,034개 |
+| 인덱싱 시간 | 2.3초 | 69초 |
+| 의존성 | GOGS_TOKEN 필수 | 로컬 접근만 필요 |
+| 장점 | Gogs 자동 동기화 | 빠른 로컬 검색 |
 
 ---
 

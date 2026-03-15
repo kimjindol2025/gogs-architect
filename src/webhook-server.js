@@ -13,6 +13,10 @@ import crypto from 'crypto';
 import GogsClient from './gogs-client.js';
 import Scraper from './scraper.js';
 import CommitExtractor from './commit-extractor.js';
+import KnowledgeBase from './knowledge-base.js';
+import Embedder from './embedder.js';
+import Reviewer from './reviewer.js';
+import IssueBot from './issue-bot.js';
 
 class WebhookServer {
   constructor(options = {}) {
@@ -21,6 +25,13 @@ class WebhookServer {
     this.gogsClient = new GogsClient();
     this.scraper = new Scraper(this.gogsClient);
     this.extractor = new CommitExtractor(this.gogsClient);
+
+    // 지식 베이스 및 리뷰어 초기화
+    this.kb = new KnowledgeBase();
+    this.embedder = new Embedder(this.kb);
+    this.reviewer = new Reviewer(this.kb, null);
+    this.issueBot = new IssueBot();
+
     this.server = null;
   }
 
@@ -120,11 +131,46 @@ class WebhookServer {
           if (phases.size > 0) {
             console.log(`  📊 Phase: ${Array.from(phases).join(', ')}`);
           }
+
+          // ✨ 새로운 기능: 자동 코드 리뷰 + 이슈 생성
+          console.log(`\n🔍 자동 코드 리뷰 시작...`);
+          await this.reviewAndCreateIssues(owner, repo, commits);
         } else {
           console.log(`  - 변경사항 없음`);
         }
       } catch (error) {
         console.error(`  ❌ 오류: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * 코드 리뷰 + 이슈 자동 생성
+   */
+  async reviewAndCreateIssues(owner, repo, commits) {
+    for (const commit of commits.slice(0, 3)) {
+      // 최근 3개 커밋만 검토
+      try {
+        // 1. 코드 리뷰
+        const review = await this.reviewer.reviewCommit(owner, repo, commit.sha);
+
+        if (review.violations && review.violations.length > 0) {
+          console.log(`  ⚠️  위반사항 발견: ${commit.sha.substring(0, 7)}`);
+
+          // 2. 코멘트 작성
+          await this.reviewer.postComment(owner, repo, commit.sha, review);
+
+          // 3. 이슈 자동 생성
+          const issue = await this.issueBot.createIssueFromReview(owner, repo, commit, review);
+          if (issue) {
+            console.log(`  📌 이슈 생성: #${issue.number}`);
+          }
+        } else if (review.warnings && review.warnings.length > 0) {
+          console.log(`  ⚠️  경고: ${commit.sha.substring(0, 7)}`);
+          await this.reviewer.postComment(owner, repo, commit.sha, review);
+        }
+      } catch (error) {
+        console.error(`  ❌ 리뷰 실패 (${commit.sha.substring(0, 7)}): ${error.message}`);
       }
     }
   }
