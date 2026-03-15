@@ -1,0 +1,22 @@
+// 단계 2: HTTP 서버 최소 테스트
+
+fn main() {
+    print("=== HTTP 서버 최소 테스트 ===")
+    print("")
+
+    print("1️⃣  vm.http.startServer 호출 전")
+    print("  포트: 13000")
+    print("  상태: 준비 중")
+    print("")
+
+    print("2️⃣  startServer 호출...")
+
+    // 가장 간단한 핸들러
+    vm.http.startServer(13000, fn(method: String, path: String, headers: Map, body: String) -> String {
+        return "OK"
+    })
+
+    print("3️⃣  startServer 호출 완료 (이 메시지가 나타나면 실패)")
+}
+
+main()

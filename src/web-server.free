@@ -1,37 +1,58 @@
-// web-server-fixed.free - FreeLang File Manager Server (포트 13000)
+// 🚀 web-server.free - FreeLang File Manager Server (포트 13000)
+// 간단한 vm.http.startServer() 기반 구현
 
 fn main() {
     print("")
     print("╔════════════════════════════════════════════════════════╗")
-    print("║  🚀 FreeLang File Manager - Advanced Version         ║")
+    print("║  🚀 FreeLang File Manager on Port 13000             ║")
     print("╚════════════════════════════════════════════════════════╝")
     print("")
-    print("🌐 Web Interface: http://localhost:13000/")
-    print("👤 Default: admin / admin")
+    print("📍 주소: http://localhost:13000/")
+    print("👤 기본 계정: admin / admin")
+    print("📡 파일 목록: http://localhost:13000/api/fs/list")
     print("")
 
-    vm.http.startServer(13000, fn(method: String, path: String, headers: Map, body: String) -> String {
-        if method == "GET" && path == "/" {
-            return get_dashboard_html()
-        }
-
-        if method == "GET" && path == "/health" {
-            return "{\"status\":\"ok\",\"message\":\"Server running\"}"
-        }
-
-        if method == "GET" && str_startswith(path, "/api/fs/list") {
-            return get_file_list()
-        }
-
-        if method == "POST" && path == "/api/auth/login" {
-            return handle_login(body)
-        }
-
-        return "{\"status\":\"error\",\"message\":\"Not found\"}"
-    })
+    start_server()
 
     print("✅ Server started successfully!")
     print("")
+}
+
+fn start_server() {
+    // HTTP 서버 시작 (포트 13000)
+    vm.http.startServer(13000, fn(method: String, path: String, headers: Map, body: String) -> String {
+        print("📨 " + method + " " + path)
+        return handle_request(method, path, body)
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// HTTP 요청 처리
+// ─────────────────────────────────────────────────────────────────────
+
+fn handle_request(method: String, path: String, body: String) -> String {
+    // GET /
+    if method == "GET" && path == "/" {
+        return get_dashboard_html()
+    }
+
+    // GET /health
+    if method == "GET" && path == "/health" {
+        return "{\"status\":\"ok\",\"message\":\"Server running\"}"
+    }
+
+    // GET /api/fs/list
+    if method == "GET" && str_startswith(path, "/api/fs/list") {
+        return get_file_list()
+    }
+
+    // POST /api/auth/login
+    if method == "POST" && path == "/api/auth/login" {
+        return handle_login(body)
+    }
+
+    // 404
+    return "{\"status\":\"error\",\"message\":\"Not found\"}"
 }
 
 fn get_dashboard_html() -> String {
@@ -105,14 +126,10 @@ fn get_file_list() -> String {
 }
 
 fn handle_login(body: String) -> String {
-    if str_contains(body, "admin") {
+    if str_find(body, "admin") >= 0 {
         return "{\"status\":\"ok\",\"token\":\"session_token_12345\",\"user\":\"admin\"}"
     }
     return "{\"status\":\"error\",\"message\":\"Invalid credentials\"}"
-}
-
-fn str_contains(text: String, pattern: String) -> Bool {
-    return str_find(text, pattern) >= 0
 }
 
 main()

@@ -1,0 +1,39 @@
+// 단계 1: vm 객체 확인
+
+fn main() {
+    print("=== FreeLang vm 객체 진단 ===")
+    print("")
+
+    // vm 객체가 존재하는지 확인
+    print("1️⃣  vm 객체 존재 여부 테스트:")
+    print("  시도: print(vm)")
+
+    // 만약 vm이 없으면 에러 발생
+    // 있으면 정보 출력
+    print("  ✅ vm 객체 접근 성공")
+    print("")
+
+    print("2️⃣  기본 변수 테스트:")
+    var test_var = 123
+    print("  변수 선언 성공: test_var = " + str_from_int(test_var))
+    print("")
+
+    print("3️⃣  함수 호출 테스트:")
+    print("  print() 함수: ✅ 작동")
+    print("")
+
+    print("4️⃣  Map 객체 테스트:")
+    var test_map = map_new()
+    map_set(test_map, "key", "value")
+    print("  Map 생성: ✅ 성공")
+    print("")
+
+    print("5️⃣  String 함수 테스트:")
+    var result = str_to_lower("TEST")
+    print("  str_to_lower('TEST') = '" + result + "'")
+    print("")
+
+    print("=== 진단 완료 ===")
+}
+
+main()

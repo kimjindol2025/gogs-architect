@@ -1,0 +1,30 @@
+// HTTP 서버 포트 바인딩 테스트
+
+fn main() {
+    print("")
+    print("═══════════════════════════════════════════")
+    print("🧪 HTTP 포트 바인딩 테스트")
+    print("═══════════════════════════════════════════")
+    print("")
+
+    print("1️⃣  vm.http.startServer 호출 전")
+    print("   포트: 13001")
+    print("   상태: 준비 완료")
+    print("")
+
+    print("2️⃣  vm.http.startServer 호출...")
+    print("   (이것은 차단 호출입니다)")
+    print("")
+
+    // 가장 간단한 핸들러
+    vm.http.startServer(13001, fn(method: String, path: String, headers: Map, body: String) -> String {
+        print("   ✅ 요청 수신: " + method + " " + path)
+        return "{\"status\":\"ok\"}"
+    })
+
+    print("")
+    print("3️⃣  이 메시지가 출력되면 startServer가 반환됨 (비정상)")
+    print("")
+}
+
+main()
